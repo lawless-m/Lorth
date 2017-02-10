@@ -391,6 +391,3 @@ modes.pcell = function ()
     PS[PS.n] = PS[PS.n] + 1
     mode = "forth"
   end
-
-
-0
