@@ -1,8 +1,9 @@
 -- repl.lua
 
-require "miniforth.lua"
+dofile("miniforth.lua")
+
+for line in io.lines() do
+	exec(line)
+end
 
 
-exec("56 .")
-
-print "running?"
