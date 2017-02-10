@@ -28,7 +28,8 @@ split = function (str, pat)
     string.gsub(str, pat or "([^%s]+)", f)
     return A
   end
-eval = function (str) return assert(loadstring(str))() end
+eval = function (str) return assert(load(str))() end
+
 
 
 ---  ____            _     ___ 
@@ -38,6 +39,7 @@ eval = function (str) return assert(loadstring(str))() end
 --- |_|   \__,_|_|   \__| |___|
 ---                            
 -- Part I: The outer interpreter.
+
 
 -- Global variables that hold the input:
 subj = "5 DUP * ."      -- what we are interpreting (example)
@@ -92,6 +94,21 @@ modes.interpret = function ()
               error("Can't interpret: "..word)
   end
 
+  ---  ___
+--- / _ \ 
+---|  __/
+--- \___|
+--- too hard to make the whole word :)
+
+-- This makes it callable
+exec = function(input)
+	subj = input
+	pos = 1
+	mode = "interpret"
+	run()
+end
+
+
 -- Our first program in MiniForth.
 -- First it defines a behavior for newlines (just skip them),
 -- for "" (change mode to "stop"; note that `word' becomes "" on
@@ -99,7 +116,10 @@ modes.interpret = function ()
 -- Then it creates a data stack - DS - and four words - "5", "DUP",
 -- "*", "." - that operate on it.
 --
-subj = [==[
+
+-- Now run it. There's no visible output.
+
+exec([==[
 %L _F["\n"] = function () end
 %L _F[""]   = function () mode = "stop" end
 %L _F["[L"] = function () eval(parsebypattern("^(.-)%sL]()")) end
@@ -113,18 +133,9 @@ subj = [==[
   _F["*"]   = function () push(DS, pop(DS) * pop(DS)) end
   _F["."]   = function () io.write(" "..pop(DS)) end
 L]
-]==]
-
--- Now run it. There's no visible output.
-pos = 1
-mode = "interpret"
-run()
+]==])
 
 -- At this point the dictionary (_F) has eight words.
-
-
-
-
 
 ---  ____            _     ___ ___ 
 --- |  _ \ __ _ _ __| |_  |_ _|_ _|
@@ -391,3 +402,4 @@ modes.pcell = function ()
     PS[PS.n] = PS[PS.n] + 1
     mode = "forth"
   end
+
