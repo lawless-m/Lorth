@@ -1,4 +1,5 @@
 
+-- fixed for 5.3 : lawless-m
 
 -- miniforth5.lua - 2007jul02, Edrx
 -- For Lua-5.1 (because of string.match)
