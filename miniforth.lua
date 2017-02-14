@@ -1,3 +1,5 @@
+
+
 -- miniforth5.lua - 2007jul02, Edrx
 -- For Lua-5.1 (because of string.match)
 -- http://angg.twu.net/miniforth/miniforth5.lua.html
@@ -206,7 +208,7 @@ RS     = { n = 0 }
 memory = { n = 0 }
 here = 1
 
-compile  = function (...) for i = 1,arg.n do compile1(arg[i]) end end
+compile  = function (...) for k,a in pairs({...}) do compile1(a) end end
 compile1 = function (x)
     memory[here] = x; here = here + 1
     memory.n = math.max(memory.n, here)
@@ -402,4 +404,6 @@ modes.pcell = function ()
     PS[PS.n] = PS[PS.n] + 1
     mode = "forth"
   end
+
+
 
