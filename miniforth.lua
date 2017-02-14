@@ -1,27 +1,19 @@
 
 -- fixed for 5.3 : lawless-m
 
--- miniforth5.lua - 2007jul02, Edrx
+-- based on miniforth5.lua - 2007jul02, Edrx
 -- For Lua-5.1 (because of string.match)
 -- http://angg.twu.net/miniforth/miniforth5.lua.html
--- http://angg.twu.net/miniforth/miniforth3.abs.txt.html
--- (find-a2ps (buffer-file-name))
-
 -- The article is here:
 --    http://angg.twu.net/miniforth-article.html
--- file:///home/edrx/TH/L/miniforth-article.html
---     (find-angg     "TH/miniforth-article.blogme")
 
--- Important: this program is not totally self-contained (yet).
+
+-- find these !!
+
 -- It invokes some functions from my LUA_INIT file:
 -- http://angg.twu.net/LUA/lua50init.lua.html
 --  (find-angg        "LUA/lua50init.lua")
 
--- Output:
--- (find-sh "lua51 ~/miniforth/miniforth5.lua")
--- (find-miniforthsh "lua51 miniforth5.lua | tee miniforth5.out")
--- http://angg.twu.net/miniforth/miniforth5.out.html
---  (find-angg        "miniforth/miniforth5.out")
 
 -- These definitions for "split" and "eval" are standard,
 -- do not include them in the printed text.
@@ -33,6 +25,8 @@ split = function (str, pat)
   end
 eval = function (str) return assert(load(str))() end
 
+-- at least stop it crashing
+warn= function(msg) io.stderr:write("\nWARN: %s\n\n", msg) end
 
 
 ---  ____            _     ___ 
@@ -43,10 +37,34 @@ eval = function (str) return assert(load(str))() end
 ---                            
 -- Part I: The outer interpreter.
 
+  
+---  _ __ ___   ___ _ __ ___   ___  _ __ _   _ 
+--- | '_ ` _ \ / _ \ '_ ` _ \ / _ \| '__| | | |
+--- | | | | | |  __/ | | | | | (_) | |  | |_| |
+--- |_| |_| |_|\___|_| |_| |_|\___/|_|   \__, |
+---                                      |___/ 
+
+-- The stacks, the memory, and "here".
+RS = { n = 0 }
+DS = { n = 0}
+memory = { n = 0 }
+here = 1
+
+-- stack manipulation
+push = function (stack, x) stack.n = stack.n + 1; stack[stack.n] = x end
+pop  = function (stack) local x = stack[stack.n]; stack[stack.n] = nil; stack.n = stack.n - 1; return x end
+
+-- Processor modes
+modes = {}
+
+-- The dictionaries
+
+_F = {} -- primitives
+_H = {} -- HEADs
 
 -- Global variables that hold the input:
-subj = "5 DUP * ."      -- what we are interpreting (example)
-pos  = 1                -- where are are (1 = "at the beginning")
+subj = ""  -- what we are interpreting
+pos  = 1   -- where are are (1 = "at the beginning")
 
 -- Low-level functions to read things from "pos" and advance "pos".
 -- Note: the "pat" argument in "parsebypattern" is a pattern with
@@ -67,17 +85,23 @@ parsewordornewline = function () return parseword() or parsenewline() end
 getword          = function () parsespaces(); return parseword() end
 getwordornewline = function () parsespaces(); return parsewordornewline() end
 
--- The dictionary.
--- Entries whose values are functions are primitives.
--- We will only introduce non-primitives in part II.
-_F = {}
+-- stack manipulation native functions
+
+
 _F["%L"] = function () eval(parserestofline()) end
+_F["\n"] = function () end
+_F[""]   = function () mode = "stop" end
+_F["[L"] = function () eval(parsebypattern("^(.-)%sL]()")) end
+				  
+_F["DUP"] = function () push(DS, DS[DS.n]) end
+_F["."]   = function () io.write(" "..pop(DS)) end
+
+-- (find-sh "lua51 ~/miniforth/miniforth5.lua")
 
 -- The "processor". It can be in any of several "modes".
 -- Its initial behavior is to run modes[mode]() - i.e.,
 -- modes.interpret() - until `mode' becomes "stop".
 mode  = "interpret"
-modes = {}
 run = function () while mode ~= "stop" do modes[mode]() end end
 
 -- Initially the processor knows only this mode, "interpret"...
@@ -86,7 +110,11 @@ interpretprimitive = function ()
     if type(_F[word]) == "function" then _F[word](); return true end
   end
 interpretnonprimitive = function () return false end   -- stub
-interpretnumber       = function () return false end   -- stub
+
+interpretnumber = function ()
+    if word and tonumber(word) then push(DS, tonumber(word)); return true end
+  end
+
 p_s_i = function () end  -- print state, for "interpret" (stub)
 modes.interpret = function ()
     word = getwordornewline() or ""
@@ -94,59 +122,8 @@ modes.interpret = function ()
     local _ = interpretprimitive() or
               interpretnonprimitive() or
               interpretnumber() or
-              error("Can't interpret: "..word)
+              warn("Can't interpret: "..word)
   end
-
-  ---  ___
---- / _ \ 
----|  __/
---- \___|
---- too hard to make the whole word :)
-
--- This makes it callable
-exec = function(input)
-	subj = input
-	pos = 1
-	mode = "interpret"
-	run()
-end
-
-
--- Our first program in MiniForth.
--- First it defines a behavior for newlines (just skip them),
--- for "" (change mode to "stop"; note that `word' becomes "" on
--- end of text), and for "[L ___ L]" blocks (eval "___" as Lua code).
--- Then it creates a data stack - DS - and four words - "5", "DUP",
--- "*", "." - that operate on it.
---
-
--- Now run it. There's no visible output.
-
-exec([==[
-%L _F["\n"] = function () end
-%L _F[""]   = function () mode = "stop" end
-%L _F["[L"] = function () eval(parsebypattern("^(.-)%sL]()")) end
-[L
-  DS = { n = 0 }
-  push = function (stack, x) stack.n = stack.n + 1; stack[stack.n] = x end
-  pop  = function (stack) local x = stack[stack.n]; stack[stack.n] = nil;
-                          stack.n = stack.n - 1; return x end
-  _F["5"]   = function () push(DS, 5) end
-  _F["DUP"] = function () push(DS, DS[DS.n]) end
-  _F["*"]   = function () push(DS, pop(DS) * pop(DS)) end
-  _F["."]   = function () io.write(" "..pop(DS)) end
-L]
-]==])
-
--- At this point the dictionary (_F) has eight words.
-
----  ____            _     ___ ___ 
---- |  _ \ __ _ _ __| |_  |_ _|_ _|
---- | |_) / _` | '__| __|  | | | | 
---- |  __/ (_| | |  | |_   | | | | 
---- |_|   \__,_|_|   \__| |___|___|
----                                
--- Part II: add to miniforth several features of a real Forth.
 
 ---             _       _       _        _       
 ---  _ __  _ __(_)_ __ | |_ ___| |_ __ _| |_ ___ 
@@ -189,25 +166,7 @@ t = 0
 d.t = function (w) return format("t=%-"..w.."d", t) end
 d.tick = function () t = t + 1; return "" end
 
-_F["."] = function () io.write(" "..pop(DS)) end  -- original
-_F["."] = function () print(" "..pop(DS)) end     -- better for when we're always printing the mode
-
--- (find-sh "lua51 ~/miniforth/miniforth5.lua")
-
-
-
-
----                                            
----  _ __ ___   ___ _ __ ___   ___  _ __ _   _ 
---- | '_ ` _ \ / _ \ '_ ` _ \ / _ \| '__| | | |
---- | | | | | |  __/ | | | | | (_) | |  | |_| |
---- |_| |_| |_|\___|_| |_| |_|\___/|_|   \__, |
----                                      |___/ 
-
--- The return stack, the memory, and "here".
-RS     = { n = 0 }
-memory = { n = 0 }
-here = 1
+---                                          
 
 compile  = function (...) for k,a in pairs({...}) do compile1(a) end end
 compile1 = function (x)
@@ -226,7 +185,6 @@ compile1 = function (x)
 -- We store heads in the memory as strings, and the
 -- table _H converts the name of a head into its code.
 
-_H = {}
 _H["DOCOL"] = function ()
     -- RS[RS.n] = RS[RS.n] + 1
     mode = "forth"
@@ -253,7 +211,7 @@ modes.forth = function ()
     RS[RS.n] = RS[RS.n] + 1
     if type(instr) == "number" then push(RS, instr); mode = "head"; return end
     if type(instr) == "string" then _F[instr](); return end
-    error("Can't run forth instr: "..mytostring(instr))
+    warn("Can't run forth instr: "..mytostring(instr))
   end
 
 -- This was a stub. Now that we know how to execute non-primitives,
@@ -315,7 +273,7 @@ modes.compile = function ()
     local _ = compileimmediateword() or
               compilenonimmediateword() or
               compilenumber() or
-              error("Can't compile: "..(word or EOT))
+              warn("Can't compile: "..(word or EOT))
   end
 
 ---                        _                   
@@ -325,17 +283,10 @@ modes.compile = function ()
 --- |_| |_|\__,_|_| |_| |_|_.__/ \___|_|  |___/
 ---                                            
 -- How to interpret arbritrary numbers.
--- In our simplest examples the "5" worked because it was in the dictionary.
--- As the bootstrap code didn't define a data stack (DS), and
--- "interpretnumber" uses DS, it was cleaner to define it there as a stub.
--- Now we replace the stub by the real definition.
-interpretnumber = function ()
-    if word and tonumber(word) then push(DS, tonumber(word)); return true end
-  end
-
 -- "compilenumber", above, defines the behavior of numbers in compile mode.
 -- It compiles first a "LIT" - a Forth primitive that eats bytecode - and
 -- then the value of the number. Now we define how "LIT" works.
+
 _F["LIT"] = function ()
     push(DS, memory[RS[RS.n]])
     RS[RS.n] = RS[RS.n] + 1
@@ -350,9 +301,44 @@ modes.lit = function ()
     mode = "forth"
   end
 
+-- MATH primitives - unary minus - always a problem :)
+
 _F["+"] = function () push(DS, pop(DS) + pop(DS)) end
+_F["-"] = function () push(DS, pop(DS) - pop(DS)) end
+_F["*"]   = function () push(DS, pop(DS) * pop(DS)) end
+_F["/"]   = function () local a = pop(DS); b = pop(DS); if b == 0 warn("div by zero") end; DS[DS.n] = a / b end
+_F["NEG"] = function () DS[DS.n] = -DS[DS.n]
 
-
+_F["ABS"]   = function () DS[DS.n] = math.abs(DS[DS.n]) end
+_F["ACOS"]   = function () DS[DS.n] = math.acos(DS[DS.n]) end
+_F["ASIN"]   = function () DS[DS.n] = math.asin(DS[DS.n]) end
+_F["ATAN"]   = function () DS[DS.n] = math.atan(DS[DS.n]) end
+_F["ATAN2"]   = function () DS[DS.n] = local x = pop(DS); DS[DS.n] = math.atan(DS[DS.n], x) end
+_F["CEIL"]   = function () DS[DS.n] = math.ceil(DS[DS.n]) end
+_F["COS"]   = function () DS[DS.n] = math.cos(DS[DS.n]) end
+_F["DEG"]   = function () DS[DS.n] = math.deg(DS[DS.n]) end
+_F["EXP"]   = function () DS[DS.n] = math.exp(DS[DS.n]) end
+_F["FLOOR"]   = function () DS[DS.n] = math.floor(DS[DS.n]) end
+_F["FMOD"]   = function () DS[DS.n] = local y = pop(DS); math.fmod(DS[DS.n], y) end
+_F["HUGE"]   = function () DS[DS.n] = math.huge end
+_F["LN"]   = function () DS[DS.n] = math.log(DS[DS.n]) end
+_F["LOG"]   = function () local base = pop(DS); DS[DS.n] = math.log(DS[DS.n], base) end
+_F["MAX"]   = function () local t = pop(DS); DS[DS.n] = math.max(t, DS[DS.n]) end
+_F["MAXINT"]   = function () DS[DS.n] = math.maxinteger end
+_F["MIN"]   = function () local t = pop(DS); DS[DS.n] = math.min(t, DS[DS.n]) end
+_F["MININT"]   = function () DS[DS.n] = math.mininteger end
+_F["MODF"]   = function () DS[DS.n] = math.modf(DS[DS.n]) end
+_F["PI"]   = function () DS[DS.n] = math.pi end
+_F["RAD"]   = function () DS[DS.n] = math.rad(DS[DS.n]) end
+_F["RANDOM"]   = function () DS[DS.n] = math.random() end
+_F["RANDOMN"]   = function () n = pop(DS); DS[DS.n] = math.random(DS[DS.n], n) end
+_F["RANDOMSEED"]   = function () math.randomseed(pop(DS)) end
+_F["SIN"]   = function () DS[DS.n] = math.sin(DS[DS.n]) end
+_F["SQRT"]   = function () DS[DS.n] = math.sqrt(DS[DS.n]) end
+_F["TAN"]   = function () DS[DS.n] = math.tan(DS[DS.n]) end
+_F["TOINTEGER"]   = function () DS[DS.n] = math.tointeger(DS[DS.n]) end
+_F["TYPE"]   = function () DS[DS.n] = math.type(DS[DS.n]) end
+_F["ULT"]   = function () n = pop(DS); DS[DS.n] = math.ult(DS[DS.n], n) end
 
 ---                  _                                              
 ---  _ __  _   _ ___| |__      _ __      _ __   ___  _ __     _ __  
@@ -408,3 +394,16 @@ modes.pcell = function ()
 
 
 
+  ---  ___
+--- / _ \ 
+---|  __/
+--- \___| XEC
+--- too hard to make the whole word :)
+
+-- This makes it callable
+exec = function(input)
+	subj = input
+	pos = 1
+	mode = "interpret"
+	run()
+end
