@@ -28,103 +28,6 @@ eval = function (str) return assert(load(str))() end
 -- at least stop it crashing
 warn= function(msg) io.stderr:write("\nWARN: %s\n\n", msg) end
 
-
----  ____            _     ___ 
---- |  _ \ __ _ _ __| |_  |_ _|
---- | |_) / _` | '__| __|  | | 
---- |  __/ (_| | |  | |_   | | 
---- |_|   \__,_|_|   \__| |___|
----                            
--- Part I: The outer interpreter.
-
-  
----  _ __ ___   ___ _ __ ___   ___  _ __ _   _ 
---- | '_ ` _ \ / _ \ '_ ` _ \ / _ \| '__| | | |
---- | | | | | |  __/ | | | | | (_) | |  | |_| |
---- |_| |_| |_|\___|_| |_| |_|\___/|_|   \__, |
----                                      |___/ 
-
--- The stacks, the memory, and "here".
-RS = { n = 0 }
-DS = { n = 0}
-memory = { n = 0 }
-here = 1
-
--- stack manipulation
-push = function (stack, x) stack.n = stack.n + 1; stack[stack.n] = x end
-pop  = function (stack) local x = stack[stack.n]; stack[stack.n] = nil; stack.n = stack.n - 1; return x end
-
--- Processor modes
-modes = {}
-
--- The dictionaries
-
-_F = {} -- primitives
-_H = {} -- HEADs
-
--- Global variables that hold the input:
-subj = ""  -- what we are interpreting
-pos  = 1   -- where are are (1 = "at the beginning")
-
--- Low-level functions to read things from "pos" and advance "pos".
--- Note: the "pat" argument in "parsebypattern" is a pattern with
--- one "real" capture and then an empty capture.
-parsebypattern = function (pat)
-    local capture, newpos = string.match(subj, pat, pos)
-    if newpos then pos = newpos; return capture end
-  end
-parsespaces     = function () return parsebypattern("^([ \t]*)()") end
-parseword       = function () return parsebypattern("^([^ \t\n]+)()") end
-parsenewline    = function () return parsebypattern("^(\n)()") end
-parserestofline = function () return parsebypattern("^([^\n]*)()") end
-parsewordornewline = function () return parseword() or parsenewline() end
-
--- A "word" is a sequence of one or more non-whitespace characters.
--- The outer interpreter reads one word at a time and executes it.
--- Note that `getwordornewline() or ""' returns a word, or a newline, or "".
-getword          = function () parsespaces(); return parseword() end
-getwordornewline = function () parsespaces(); return parsewordornewline() end
-
--- stack manipulation native functions
-
-
-_F["%L"] = function () eval(parserestofline()) end
-_F["\n"] = function () end
-_F[""]   = function () mode = "stop" end
-_F["[L"] = function () eval(parsebypattern("^(.-)%sL]()")) end
-				  
-_F["DUP"] = function () push(DS, DS[DS.n]) end
-_F["."]   = function () io.write(" "..pop(DS)) end
-
--- (find-sh "lua51 ~/miniforth/miniforth5.lua")
-
--- The "processor". It can be in any of several "modes".
--- Its initial behavior is to run modes[mode]() - i.e.,
--- modes.interpret() - until `mode' becomes "stop".
-mode  = "interpret"
-run = function () while mode ~= "stop" do modes[mode]() end end
-
--- Initially the processor knows only this mode, "interpret"...
--- Note that "word" is a global variable.
-interpretprimitive = function ()
-    if type(_F[word]) == "function" then _F[word](); return true end
-  end
-interpretnonprimitive = function () return false end   -- stub
-
-interpretnumber = function ()
-    if word and tonumber(word) then push(DS, tonumber(word)); return true end
-  end
-
-p_s_i = function () end  -- print state, for "interpret" (stub)
-modes.interpret = function ()
-    word = getwordornewline() or ""
-    p_s_i()
-    local _ = interpretprimitive() or
-              interpretnonprimitive() or
-              interpretnumber() or
-              warn("Can't interpret: "..word)
-  end
-
 ---             _       _       _        _       
 ---  _ __  _ __(_)_ __ | |_ ___| |_ __ _| |_ ___ 
 --- | '_ \| '__| | '_ \| __/ __| __/ _` | __/ _ \
@@ -133,6 +36,8 @@ modes.interpret = function ()
 --- |_|                                          
 --
 -- In this block "d" is as a shorthand for "dump"...
+
+-- this stuff is for inspection during development
 
 format = string.format
 d = {}
@@ -166,7 +71,112 @@ t = 0
 d.t = function (w) return format("t=%-"..w.."d", t) end
 d.tick = function () t = t + 1; return "" end
 
----                                          
+
+
+---- END OF PRINTSTATE
+
+
+---  _ __ ___   ___ _ __ ___   ___  _ __ _   _ 
+--- | '_ ` _ \ / _ \ '_ ` _ \ / _ \| '__| | | |
+--- | | | | | |  __/ | | | | | (_) | |  | |_| |
+--- |_| |_| |_|\___|_| |_| |_|\___/|_|   \__, |
+---                                      |___/ 
+
+-- global stuff
+
+
+-- stacks
+RS = { n = 0 }
+DS = { n = 0}
+
+-- required stack manipulation, 
+push = function (stack, x) stack.n = stack.n + 1; stack[stack.n] = x end
+pop  = function (stack) local x = stack[stack.n]; stack[stack.n] = nil; stack.n = stack.n - 1; return x end
+
+
+-- the cells
+memory = { n = 0 }
+
+-- Processor modes
+modes = {}
+
+-- The dictionaries
+
+_F = {} -- primitives
+_H = {} -- HEADs
+
+-- _F dictionary pointer
+here = 1
+
+---  ____            _     ___ 
+--- |  _ \ __ _ _ __| |_  |_ _|
+--- | |_) / _` | '__| __|  | | 
+--- |  __/ (_| | |  | |_   | | 
+--- |_|   \__,_|_|   \__| |___|
+---                            
+-- Part I: The outer interpreter.
+  
+
+-- Global variables that hold the input:
+subj = ""  -- what we are interpreting
+pos  = 1   -- where are are (1 = "at the beginning")
+
+-- Low-level functions to read things from "pos" and advance "pos".
+-- Note: the "pat" argument in "parsebypattern" is a pattern with
+-- one "real" capture and then an empty capture.
+parsebypattern = function (pat)
+    local capture, newpos = string.match(subj, pat, pos)
+    if newpos then pos = newpos; return capture end
+  end
+parsespaces     = function () return parsebypattern("^([ \t]*)()") end
+parseword       = function () return parsebypattern("^([^ \t\n]+)()") end
+parsenewline    = function () return parsebypattern("^(\n)()") end
+parserestofline = function () return parsebypattern("^([^\n]*)()") end
+parsewordornewline = function () return parseword() or parsenewline() end
+
+-- A "word" is a sequence of one or more non-whitespace characters.
+-- The outer interpreter reads one word at a time and executes it.
+-- Note that `getwordornewline() or ""' returns a word, or a newline, or "".
+getword          = function () parsespaces(); return parseword() end
+getwordornewline = function () parsespaces(); return parsewordornewline() end
+
+
+
+-- (find-sh "lua51 ~/miniforth/miniforth5.lua")
+
+-- The "processor". It can be in any of several "modes".
+-- Its initial behavior is to run modes[mode]() - i.e.,
+-- modes.interpret() - until `mode' becomes "stop".
+mode  = "interpret"
+run = function () while mode ~= "stop" do modes[mode]() end end
+
+-- Initially the processor knows only this mode, "interpret"...
+-- Note that "word" is a global variable.
+interpretprimitive = function ()
+    if type(_F[word]) == "function" then _F[word](); return true end
+  end
+  
+interpretnumber = function ()
+    if word and tonumber(word) then push(DS, tonumber(word)); return true end
+  end
+
+interpretnonprimitive = function ()
+    if type(_F[word]) == "number" then
+      push(RS, "interpret")
+      push(RS, _F[word])
+      mode = "head"
+      return true
+    end
+  end 
+  
+modes.interpret = function ()
+    word = getwordornewline() or ""
+    p_s_i() -- this is a debug tool, should be removed
+    local _ = interpretprimitive() or
+              interpretnonprimitive() or
+              interpretnumber() or
+              warn("Can't interpret: "..word)
+  end
 
 compile  = function (...) for k,a in pairs({...}) do compile1(a) end end
 compile1 = function (x)
@@ -214,16 +224,16 @@ modes.forth = function ()
     warn("Can't run forth instr: "..mytostring(instr))
   end
 
--- This was a stub. Now that we know how to execute non-primitives,
--- replace it with the real definition.
-interpretnonprimitive = function ()
-    if type(_F[word]) == "number" then
-      push(RS, "interpret")
-      push(RS, _F[word])
-      mode = "head"
-      return true
-    end
-  end
+-- all adding Lua code to the dictionary
+_F["%L"] = function () eval(parserestofline()) end
+_F["\n"] = function () end
+_F[""]   = function () mode = "stop" end
+_F["[L"] = function () eval(parsebypattern("^(.-)%sL]()")) end
+
+
+_F["DUP"] = function () push(DS, DS[DS.n]) end
+_F["."]   = function () io.write(" "..pop(DS)) end
+			  
 
 -- ":" starts a definition, and switches from "interpret" to "compile".
 -- ";" closes a definition, and switches from "compile" to "interpret".
@@ -236,6 +246,7 @@ _F[";"] = function ()
     compile("EXIT")
     mode = "interpret"
   end
+
 IMMEDIATE = {}
 IMMEDIATE[";"] = true
 
@@ -252,6 +263,7 @@ compileimmediateword = function ()
       return true
     end
   end
+
 compilenonimmediateword = function ()
     if word and _F[word] and not IMMEDIATE[word] then
       if type(_F[word]) == "function" then
