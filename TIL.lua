@@ -3,6 +3,15 @@
 List = function()
 	local list = {n=0}
 	list["append"] = function(v) list.n = list.n+1; list[list.n] = v; end
+	list["trunc"] = 
+		function(i)	
+			if i then 
+				for k = list.n,i,-1 do
+					list[k] = nil
+				end
+				list.n = i-1
+			end
+		end
 	list["tostring"] = 
 		function()
 			local str = ""
@@ -64,13 +73,16 @@ Dict = function()
 	}
 	dict["find"] = 
 		function(t)
-			for i = dict.words.n,-1,1
-				if dict.words.name == then
+			for i = dict.words.n,1,-1
+				if dict.words[i] and dict.words[i].name == then
 					return i
 				end
 			end
 			return nil
 		end
+	dict["add"] = function(w) dict.words.append(w) end
+	dict["drop"] = function(w) dict.words.trunc(dict.find(w)) end
+	
 	return dict
 end
 
