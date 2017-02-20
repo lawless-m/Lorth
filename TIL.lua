@@ -83,41 +83,83 @@ Dict = function()
 end
 
 Cpu = function()
-	local dict = Dict()
-	local DS = Stack()
-	local RS = Stack()
-	
-	cpu = {i=0; cfa=0}
+	cpu = {i=0; cfa=0; pad=""; DS=Stack(); RS=Stack(); dict=Dict()}
 	cpu.run = 
 		function()
-			local p = dict[cpu.cfa]
-			cfa = cfa + 1
+			local p = cpu.dict[cpu.cfa]
+			cpu.cfa = cpu.cfa + 1
 			return p
 		end
 	cpu.next = 
 		function()
-			cfa = dict[i]
-			i = i + 1
+			cpu.cfa = cpu.dict[cpu.i]
+			cpu.i = cpu.i + 1
 			return cpu.run
 		end
 	cpu.semi = 
 		function()
-			i = RS.pop()
+			cpu.i = cpu.RS.pop()
 			return cpu.next
 		end
 	cpu.execute =
 		function(wa)
-			local ca = dict[wa]
-			local f = dict[ca]
+			local ca = cpu.dict[wa]
+			local f = cpu.dict[ca]
 			if type(f) == "function" then
 				f()
 			end
 		end
 	cpu.allot = 
 		function(n)
-			local a = dict.n
-			dict.n += n
+			local a = cpu.dict.n
+			cpu.dict.n += n
 			return a
 		end
 	return cpu
+	
+	cpu.inner =
+		function(pointer, input)
+			local n = cpu.dict.n
+			cpu.pad = input
+			cpu.i = pointer
+			local f = cpu.next
+			while type(f) == "function" do
+				f = f(cpu)
+			end
+			if cpu.pad != "" then
+				cpu.dict.n = n
+			end
+			return cpu.pad
+		end
+			
+	cpu.parse =
+		function(input)
+			cpu.dict[-100] = cpu.dict.cfa(cpu.vocabulary, "outer")
+			cpu.dict[-99] = nil
+			cpu.inner(-100, input)
+			cpu.dict[-100] = nil
+			cpu.dict[-99] = nil
+		end
 end
+
+function tokenize(terminator, rawtext)
+	if rawtext == "" or terminator == "" then
+		return ""
+	end
+	
+	local token = ""
+	local fragment
+	local bits
+	local trim_length
+	
+	while (rawtext != nil) do
+	
+	
+	
+	end
+	
+end
+
+
+
+
