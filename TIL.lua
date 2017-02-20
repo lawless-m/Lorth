@@ -142,24 +142,35 @@ Cpu = function()
 		end
 end
 
-function tokenize(terminator, rawtext)
-	if rawtext == "" or terminator == "" then
-		return ""
+function tokenize_string(rawtext)
+	local qot = string.find(rawtext, "\"", 1, true)
+	if qot == nil then
+		return {rawtext, ""}
+	end
+	local eot = string.find(rawtext, "\\", 1, true)
+	if eot == nil or qot < eot then -- normal tokenize
+		eot = string.find(rawtext, "\"", 1, true) - 1
+		return {string.sub(rawtext, 1, eot), string.sub(rawtext, eot+2)}
 	end
 	
-	local token = ""
-	local fragment
-	local bits
-	local trim_length
-	
-	while (rawtext != nil) do
-	
-	
-	
-	end
-	
+	local out = string.sub(rawtext, 1, eot-1) .. string.sub(rawtext, eot+1, eot+1)
+	t = tokenize_string(string.sub(rawtext, eot+2))
+	return {out .. t[1], t[2]}
 end
 
+function tokenize(terminator, rawtext) 
+	-- split at the terminator, return text before the terminator and text after the terminator stops repeating (e.g. ("-", "ab--cd-") returns {"ab", "cd-"}
 
-
-
+	-- if terminator is a quote do a special routine
+	if terminator == "\"" then return tokenize_string(rawtext) end
+	
+	-- should work on returning just the slice integers not the strings
+	
+	if rawtext == "" or terminator == "" then return nil end
+	
+	local eot = string.find(rawtext, terminator, 1, true) -1 -- plain text search from start of string
+	
+	local sot = eot + 2
+	while string.sub(rawtext, sot, sot) == terminator do sot = sot + 1 end
+	return {string.sub(rawtext, 1, eot), string.sub(rawtext, sot)}
+end
