@@ -127,6 +127,7 @@ Dict = function()
 		function(vocab, word, words)
 			local nfa, cfa, pfa = dict.header(vocab, word)
 			dict[cfa] = dict.ca(vocab, "colon")
+			dict.n = pfa
 			for i = 1,#words do
 				dict.push(words[i])
 			end
@@ -137,6 +138,7 @@ Dict = function()
 		
 	dict.cfa = 
 		function(vocab, k)
+			print("SRCH for", vocab, k)
 			local nfa = dict.entry
 			while nfa do
 				if dict[nfa] == k and dict[nfa + 1] == vocab then
@@ -170,6 +172,25 @@ Dict = function()
 			if w == nil then return nil end
 			return {v, w}
 		end
+		
+	dict.word_totable =
+		function(prev_nfa)
+			return {
+				
+				word = dict[nfa],
+				vocab = dict[nfa+1],
+				lfa = dict[nfa_to_lfa(nfa)],
+				cf = 0
+			}
+		end
+		
+	--[[setmetatable(dict, {__tostring=
+		function() 
+		
+		return "HEY" 
+		
+		end})
+		]]--
 		
 	return dict
 end
@@ -280,7 +301,26 @@ end
 
 function bootstrap(dict)
 	local cfa = function(w) return dict.cfa("context", w) end
+	
+	print("DICT", dict)
 
+	dict.primary(
+		"context",
+		"colon", -- /* execute a wordlist */
+		[[
+			cpu.RS.push(cpu.i)
+			cpu.i = cpu.cfa
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"(semi)", -- /* ( -- ) execute semi */
+		[[
+			return cpu.semi
+		]]
+	)
 
 	dict.primary(
 		"compile", 
@@ -573,6 +613,24 @@ function bootstrap(dict)
 	
 	dict.primary(
 		"context",
+		"cfa", -- /* ( NFA -- CFA) push Code Field Address for the given Name Field Address , just arithmetic */
+		[[
+			cpu.DS.push(nfa_to_cfa(cpu.DS.pop()))
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"dp++", --  /* ( -- ) increment the dictionary pointer */
+		[[
+			cpu.dict.n = cpu.dict.n + 1
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
 		"?number", -- /* ( -- flag (maybe value) ) depending on the mode, push a flag and the value or store it in the dictionary */
 		[[
 			local n = tonumber(cpu.token)
@@ -657,10 +715,10 @@ function bootstrap(dict)
 		{
 			cfa("search"), 
 			cfa("dup"), 
-			cfa("(if!rjmp)", 
+			cfa("(if!rjmp)"), 
 			17, 
 				cfa("<mode"), 
-				cfa("(if!rjmp)", 
+				cfa("(if!rjmp)"), 
 				14, 
 					cfa("drop"), 
 					cfa("compile"), 
@@ -670,13 +728,15 @@ function bootstrap(dict)
 					cfa(">vocabulary"), 
 					cfa("dup"), 
 					cfa("not"), 
-					cfa("(if!rjmp)", 
+					cfa("(if!rjmp)"), 
 					4, 
 						cfa("(value)"),
 						true,
 						cfa(">state"),
 		}
 	)
+	
+	print(dict)
 	
 	dict.secondary(
 		"context",
@@ -731,13 +791,13 @@ function bootstrap(dict)
 		{
 			cfa("spc"),
 			cfa("token?"),
-			cfa("(if!rjmp"),
+			cfa("(if!rjmp)"),
 			13,
 				cfa("?search"),
-				cfa("(if!rjmp"),
+				cfa("(if!rjmp)"),
 				7,
 					cfa("?number"),
-					cfa("(if!rjmp"),
+					cfa("(if!rjmp)"),
 					5,
 						cfa("tokenerror"),
 						cfa("(rjmp)"),
@@ -764,6 +824,7 @@ function bootstrap(dict)
 			cfa(">mode"),
 		}
 	)
+	
 	
 	dict.secondary(
 		"context",
