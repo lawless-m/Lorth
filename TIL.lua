@@ -40,13 +40,13 @@ Stack = function()
 			-- WARN UNDERFLOW
 			return nil	
 		end
-	
-	return setmetatable(stack, {"__tostring" = 
+		
+	return setmetatable(stack, {__tostring = 
 		function()
 			local str = ""
 			local i
 			for i = 1,stack.n do
-				str = str .. i .. ":" .. stack[i] .. "\n"
+				str = str .. i .. ":" .. tostring(stack[i]) .. "\n"
 			end
 			return str		
 		end
@@ -113,11 +113,12 @@ Dict = function()
 		end
 
 	dict.primary =
-		function(vocab, word, fn)
+		function(vocab, word, fntxt)
 			local nfa, cfa, pfa = dict.header(vocab, word)
 			dict[cfa] = pfa
-			dict[pfa] = fn
-			dict.n = pfa + 1
+			dict[pfa] = load("cpu=...;" .. fntxt)
+			dict[pfa+1] = fntxt
+			dict.n = pfa + 2
 			dict.entry = nfa
 			return nfa
 		end
@@ -125,11 +126,11 @@ Dict = function()
 	dict.secondary =
 		function(vocab, word, words)
 			local nfa, cfa, pfa = dict.header(vocab, word)
-			dict[cfa] = dict.ca[vocab, 'colon']
-			for i = 1,#body do
+			dict[cfa] = dict.ca(vocab, "colon")
+			for i = 1,#words do
 				dict.push(words[i])
 			end
-			dict.push('(semi)')
+			dict.push(dict.cfa("context", "(semi)"))
 			dict.entry = nfa
 			return nfa
 		end
@@ -145,21 +146,21 @@ Dict = function()
 			end
 		end
 		
-	dict.ca = function(vocab, k) dict[dict.cfa(vocab, k)]	end
+	dict.ca = function(vocab, k) return dict[dict.cfa(vocab, k)]	end
 		
 	dict.forget =
 		function()
 			local p = dict.n
 			dict.n = dict.entry
 			dict.entry = dict[nfa_to_lfa[dict.entry]]
-			for i = p,dict.n,-1
+			for i = p,dict.n,-1 do
 				dict[i] = "DEAFBEEF" -- should be nil but sentinel better
 			end
 		end
 		
-	dict.vocabulary = function(pfa) dict[pfa_to_nfa(pfa) + 1) end
+	dict.vocabulary = function(pfa) return dict[pfa_to_nfa(pfa) + 1] end
 	
-	dict.word = function(pfa) dict[pfa_to_nfa(pfa)) end
+	dict.word = function(pfa) return dict[pfa_to_nfa(pfa)] end
 	
 	dict.vocab_word =
 		function(pfa)
@@ -175,16 +176,16 @@ end
 
 Cpu = function()
 	cpu = {
-		i = 0
-		cfa = 0
-		pad = ""
-		DS = Stack()
-		RS = Stack()
-		JS = Stack()
-		dict = Dict()
-		mode = false
-		state = false
-		vocabulary = "context"
+		i = 0,
+		cfa = 0,
+		pad = "",
+		DS = Stack(),
+		RS = Stack(),
+		JS = Stack(),
+		dict = Dict(),
+		mode = false,
+		state = false,
+		vocabulary = "context",
 	}
 	
 	cpu.run = 
@@ -215,10 +216,9 @@ Cpu = function()
 	cpu.allot = 
 		function(n)
 			local a = cpu.dict.n
-			cpu.dict.n += n
+			cpu.dict.n = cpu.dict.n + n
 			return a
 		end
-	return cpu
 	
 	cpu.inner =
 		function(pointer, input)
@@ -229,7 +229,7 @@ Cpu = function()
 			while type(f) == "function" do
 				f = f(cpu)
 			end
-			if cpu.pad != "" then
+			if cpu.pad ~= "" then
 				cpu.dict.n = n
 			end
 			return cpu.pad
@@ -243,6 +243,8 @@ Cpu = function()
 			cpu.dict[-100] = nil
 			cpu.dict[-99] = nil
 		end
+		
+	return cpu
 end
 
 function tokenize_string(rawtext)
@@ -277,48 +279,509 @@ function tokenize(terminator, rawtext)
 end
 
 function bootstrap(dict)
+	local cfa = function(w) return dict.cfa("context", w) end
+
+
 	dict.primary(
 		"compile", 
 		";",  --  /* ( -- ) finish the definition of a word */
-		function(cpu)
+		[[
 			cpu.dict[cpu.dict.pointer] = cpu.dict.cfa(cpu.vocabulary, "(semi)")
 			cpu.dict.pointer = cpu.dict.pointer + 1
 			cpu.mode = false
 			return cpu.next
-		end
-		)
+		]]
 	)
 		
 	dict.primary( --  /* ( -- wa("(value)") )  lookup the word address of (value) for postpone */
 		"compile", 
 		"`value",
-		function(cpu)
+		[[
 			local v = cpu.dict.cfa("context", "(value)")
 			cpu.dict.push(v)
 			cpu.dict.push(v)
 			return cpu.next
-		end
-		)
+		]]
 	)
+
 	
 	dict.primary(
 		"context",
 		"//", --  /* ( -- ) store the pad in the dictionary */
-		function(cpu)
+		[[
 			cpu.dict.push("// " .. cpu.pad)
 			cpu.pad = ""
 			return cpu.next
-		end
-		)
+		]]
 	)
 	
 	dict.primary(
 		"context",
 		"t", -- /* ( -- true ) */
-		function(cpu)
+		[[
 			cpu.DS.push(true)
 			return cpu.next
-		end
-		)
+		]]
 	)
+	
+	
+	dict.primary(
+		"context",
+		"f", -- /* ( -- false ) */
+		[[
+			cpu.DS.push(false)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"=", -- /* ( b a - (b == a) ) equality */
+		[[
+			cpu.DS.push(cpu.DS.pop() == cpu.DS.pop())
+			return cpu.next
+		]]
+	
+	)
+	
+	dict.primary(
+		"context",
+		"here", -- /* ( - DP )  push dictionary pointer */
+		[[
+			cpu.DS.push(cpu.DS.n)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"there", -- /* (NEWDP - ) pop to the dictionary pointer */
+		[[
+			cpu.DS.n = (cpu.DS.pop())
+			return cpu.next
+		]]
+	)
+
+	dict.primary(
+		"context",
+		"dup", -- /* ( a -- a a ) duplicate the tos */
+		[[
+			cpu.DS.push(cpu.DS.top())
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"tuck", -- /* ( b a -- a b a ) copy tos to 3rd place, could just be : tuck swap over ; */
+		[[
+			local a = cpu.DS.pop()
+			local b = cpu.DS.pop()
+			cpu.DS.push(a)
+			cpu.DS.push(b)
+			cpu.DS.push(a)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"context", -- /* ( -- "context" ) push "context" */
+		[[
+			cpu.DS.push("context")
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"compile", -- /* ( -- "compile" ) push "compile" */
+		[[
+			cpu.DS.push("compile")
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"execute", -- /* ( -- wa ) run the word with its address on the tos */
+		[[
+			cpu.cfa = cpu.DS.pop()
+			return cpu.run
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"token", -- /* ( token -- ) extract everything in cpu.pad until the terminator, and put it in the dictionary */
+		[[
+			cpu.token, cpu.pad = tokenize(cpu.DS.pop(), cpu.pad)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"token?", -- /* ( token -- ( true | false ) ) extract everything in cpu.pad until the terminator, put it in the dictionary and report if you found anything */
+		[[
+			local term = cpu.DS.pop()
+			if cpu.pad == "" then
+				cpu.DS.push(false)
+				return cpu.next
+			end
+			cpu.token, cpu.pad = tokenize(cpu.DS.pop(), cpu.pad)
+			cpu.DS.push(true)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"<token", -- push the token to the DS
+		[[
+			cpu.DS.push(cpu.token)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"(value)", --  /* ( -- n ) push the contents of the next cell */
+		[[
+			cpu.DS.push(cpu.dict[cpu.i])
+			cpu.i = cpu.i + 1}
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		",", -- /* ( val -- ) store tos in the next cell */
+		[[
+			cpu.dict.push(cpu.DS.pop())
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"drop", -- /* ( a -- ) drop the tos */
+		[[
+			cpu.DS.pop()
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"ca", -- /* ( "word" -- ca|undefined ) push code address or nil on tos */
+		[[
+			cpu.DS.push(cpu.dict.ca(cpu.vocabulary, cpu.DS.pop()))
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"search", -- /* ( -- (false wa) | true ) search the dictionary for "word" push the wa and a flag for (not found) */
+		[[
+			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
+			if wa then
+				cpu.DS.push(wa)
+				cpu.DS.push(false)
+			else
+				cpu.DS.push(true)
+			end
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"<mode", -- /* ( -- mode ) push the current mode */
+		[[
+			cpu.DS.push(cpu.mode)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		">mode", --  /* ( mode -- ) set the current mode */
+		[[
+			cpu.mode = (cpu.DS.pop() == true)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"<state", -- /* ( -- state ) push the current state */
+		[[
+			cpu.DS.push(cpu.state)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		">state", -- /* ( state -- ) set the current state */
+		[[
+			cpu.state = (cpu.DS.pop() == true)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		">vocabulary", -- /* ( vocabulary -- ) set the current vocabulary */
+		[[
+			cpu.vocabulary = cpu.DS.pop()
+			return cpu.next		
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"not", -- /* ( v -- !v ) clean boolean not */
+		[[
+			if cpu.DS.pop() then
+				cpu.DS.push(false)
+			else
+				cpu.DS.push(true)
+			end
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		">entry", -- /* ( -- ) write to cpu.dict.entry */
+		[[
+			cpu.dict.entry = cpu.DS.pop()
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"<entry", --/* ( -- daddr ) push cpu.dict.entry  */
+		[[
+			cpu.DS.push(cpu.dict.entry)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"?number", -- /* ( -- flag (maybe value) ) depending on the mode, push a flag and the value or store it in the dictionary */
+		[[
+			local n = tonumber(cpu.token)
+			
+			if n == nil then
+				cpu.DS.push(true)
+				return cpu.next
+			end
+			
+			if cpu.mode then
+				cpu.dict.push(cpu.dict.cfa(cpu.vocabulary, "(value)"))
+				cpu.dict.push(n)
+			else
+				cpu.DS.push(n)
+			end
+			cpu.DS.push(false)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"tokenerror", --  { /* ( -- ) report an unrecognised word error */
+		[[
+			io.stderr.write(">>" .. cpu.token .. "<< error, unrecognised word (inside the >><<)")
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"spc", --  /* ( -- " " ) push a space character */
+		[[
+			cpu.DS.push(" ")
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		",vocab", -- /* ( -- ) store the current vocabulary in the dictionary */
+		[[
+			cpu.dict.push(cpu.vocabulary)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"(if!rjmp)", --  /* ( flag -- ) if flag is false, jump by the delta in next cell, or just skip over */
+		[[
+			if cpu.DS.pop() then
+				cpu.i = cpu.i + 1
+			else
+				cpu.i = cpu.i + cpu.dict[cpu.i]
+			end
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"(rjmp)", -- /* ( -- ) unconditional jump by the delta in the next cell */
+		[[
+			cpu.i = cpu.i + cpu.dict[cpu.i]
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"<cfa*", -- /* push the currrent value of cpu.cfa and exit (points to PFA in create)  */
+		[[
+			cpu.DS.push(cpu.cfa)
+			return cpu.semi
+		]]
+	)
+	
+	dict.secondary(
+		"context",
+		"?search", --  /*  ( -- flag ) search the dictionaries for the word in the pad flag is not found */
+		{
+			cfa("search"), 
+			cfa("dup"), 
+			cfa("(if!rjmp)", 
+			17, 
+				cfa("<mode"), 
+				cfa("(if!rjmp)", 
+				14, 
+					cfa("drop"), 
+					cfa("compile"), 
+					cfa(">vocabulary"), 
+					cfa("search"), 
+					cfa("context"), 
+					cfa(">vocabulary"), 
+					cfa("dup"), 
+					cfa("not"), 
+					cfa("(if!rjmp)", 
+					4, 
+						cfa("(value)"),
+						true,
+						cfa(">state"),
+		}
+	)
+	
+	dict.secondary(
+		"context",
+		"?execute", -- /* ( -- ) execute the word if it's immediate (i think)  */
+		{
+			cfa("<state"),
+			cfa("<mode"),
+			cfa("(value)"),
+			false,
+			cfa(">state"),
+			cfa("="),
+			cfa("(if!rjmp)"),
+			4,
+				cfa("execute"),
+				cfa("(rjmp)"),
+				2,
+			cfa(","),		
+		}
+	)
+	
+	dict.secondary(
+		"context",
+		"<word", -- /* read space delimeted word from the pad */
+		{
+			cfa("spc"),
+			cfa("token"),
+			cfa("<token"),
+		}
+	)
+	
+	dict.secondary(
+		"context",
+		"create", -- /* ( -- ) create a dictionary entry for the next word in the pad */
+		{
+			cfa("<entry"),
+			cfa("here"),
+			cfa(">entry"),
+			cfa("<word"),
+			cfa(","),
+			cfa(",vocab"),
+			cfa(","),
+			cfa("(value)"),
+			"<cfa*",
+			cfa("ca"),
+			cfa(","),
+		}
+	)
+	
+	dict.secondary(
+		"context",
+		"outer", -- /* ( -- ) tokenize the pad and do whatever it says */
+		{
+			cfa("spc"),
+			cfa("token?"),
+			cfa("(if!rjmp"),
+			13,
+				cfa("?search"),
+				cfa("(if!rjmp"),
+				7,
+					cfa("?number"),
+					cfa("(if!rjmp"),
+					5,
+						cfa("tokenerror"),
+						cfa("(rjmp)"),
+						4,
+					cfa("?execute"),
+					cfa("(rjmp)")
+					-15,
+		}
+	)
+	
+	dict.secondary(
+		"context",
+		":", -- /* ( -- ) create a word entry */
+		{
+			cfa("(value)"),
+			"colon",
+			cfa("create"),
+			cfa("<entry"),
+			cfa("cfa"),
+			cfa("there"),
+			cfa("ca"),
+			cfa(","),
+			cfa("t"),
+			cfa(">mode"),
+		}
+	)
+	
+	dict.secondary(
+		"context",
+		"does>", -- /* ( -- ) fill dictionary with runtime info */
+		{
+			cfa("(value)"),
+			"(does>)",
+			cfa("<entry"),
+			cfa("cfa"),
+			cfa("there"),
+			cfa("ca"),
+			cfa(","),
+			cfa("dp++"),
+			cfa("t"),
+			cfa(">mode"),
+		}
+	)
+	
+	-- now we should be able to just parse raw text
 end
+
