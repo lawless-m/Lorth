@@ -99,6 +99,28 @@ pfa_to_lfa = function(n)  return n - 2 end
 pfa_to_vocab = function(n)  return n - header_size end
 pfa_to_nfa = function(n)  return n - (header_size + 1) end
 
+
+-------------------------
+--- DEBUGGIUNG
+
+	
+function locate_fn(cpu, addr)
+	if addr == nil then
+		return nil, nil
+	end
+	local dict = cpu.dict
+	local nfa = dict.entry
+	while nfa > 0 do
+		if dict[nfa+4] == addr then
+			return dict[nfa], dict[nfa+1]
+		end
+		nfa = dict[nfa_to_lfa(nfa)]
+	end
+end
+	
+
+----------
+
 Dict = function()
 	local dict = Stack()
 	dict.entry = 0
@@ -115,10 +137,15 @@ Dict = function()
 	dict.primary =
 		function(vocab, word, fntxt)
 			local nfa, cfa, pfa = dict.header(vocab, word)
-			dict[cfa] = pfa
-			dict[pfa] = load("cpu=...;" .. fntxt)
-			dict[pfa+1] = fntxt
-			dict.n = pfa + 2
+			dict[cfa] = pfa -- cell with the function pointer to execute
+			fn = load("cpu=...;" .. fntxt)
+			if fn == nil then
+				print(fntxt)
+				error("Compile failed")
+			end
+			dict[pfa] = fn
+			--dict[pfa+1] = fntxt
+			dict.n = pfa + 1
 			dict.entry = nfa
 			return nfa
 		end
@@ -138,7 +165,6 @@ Dict = function()
 		
 	dict.cfa = 
 		function(vocab, k)
-			print("SRCH for", vocab, k)
 			local nfa = dict.entry
 			while nfa do
 				if dict[nfa] == k and dict[nfa + 1] == vocab then
@@ -197,6 +223,7 @@ end
 
 Cpu = function()
 	cpu = {
+		thread = nil,
 		i = 0,
 		cfa = 0,
 		pad = "",
@@ -211,9 +238,12 @@ Cpu = function()
 	
 	cpu.run = 
 		function()
-			local p = cpu.dict[cpu.cfa]
+			local cp = cpu.dict[cpu.cfa] -- cell containing function to run
+			if cp == nil then
+				return nil
+			end
 			cpu.cfa = cpu.cfa + 1
-			return p
+			return cpu.dict[cp] -- should be a function
 		end
 	cpu.next = 
 		function()
@@ -242,27 +272,47 @@ Cpu = function()
 		end
 	
 	cpu.inner =
-		function(pointer, input)
-			local n = cpu.dict.n
-			cpu.pad = input
-			cpu.i = pointer
-			local f = cpu.next
-			while type(f) == "function" do
-				f = f(cpu)
+		function()
+			local n, f
+			local d_w, d_v
+			fns = {}
+			fns[cpu.run] = "run"
+			fns[cpu.next] = "next"
+			fns[cpu.execute] = "execute"
+			fns[cpu.semi] = "semi"
+			printfn = function(fa)
+					if fns[fa] == nil then
+						d_w, d_v = locate_fn(cpu, fa)
+						print(fa, d_v .. "/" .. d_w)
+					else
+						print(fa, fns[fa])
+					end
+				end
+			while cpu.i ~= "exit" do
+				if cpu.pad ~= "" then
+					n = cpu.dict.n
+					f = cpu.next
+					while type(f) == "function" do
+						f = f(cpu)
+					end
+					if cpu.pad ~= "" then
+						cpu.dict.n = n
+					end
+				end
+				coroutine.yield()
 			end
-			if cpu.pad ~= "" then
-				cpu.dict.n = n
-			end
-			return cpu.pad
 		end
 			
-	cpu.parse =
+	cpu.input =
 		function(input)
-			cpu.dict[-100] = cpu.dict.cfa(cpu.vocabulary, "outer")
+			cpu.dict[-100] = cpu.dict.cfa("context", "outer")
 			cpu.dict[-99] = nil
-			cpu.inner(-100, input)
+			cpu.i = -100
+			cpu.pad = cpu.pad .. " " .. input
+			coroutine.resume(cpu.thread)
 			cpu.dict[-100] = nil
 			cpu.dict[-99] = nil
+			
 		end
 		
 	return cpu
@@ -271,39 +321,67 @@ end
 function tokenize_string(rawtext)
 	local qot = string.find(rawtext, "\"", 1, true)
 	if qot == nil then
-		return {rawtext, ""}
+		return rawtext, ""
 	end
 	local eot = string.find(rawtext, "\\", 1, true)
 	if eot == nil or qot < eot then -- normal tokenize
 		eot = string.find(rawtext, "\"", 1, true) - 1
-		return {string.sub(rawtext, 1, eot), string.sub(rawtext, eot+2)}
+		return string.sub(rawtext, 1, eot), string.sub(rawtext, eot+2)
 	end
 	
 	local out = string.sub(rawtext, 1, eot-1) .. string.sub(rawtext, eot+1, eot+1)
 	t = tokenize_string(string.sub(rawtext, eot+2))
-	return {out .. t[1], t[2]}
+	return out .. t[1], t[2]
 end
 
 function tokenize(terminator, rawtext) 
 	-- split at the terminator, return text before the terminator and text after the terminator stops repeating (e.g. ("-", "ab--cd-") returns {"ab", "cd-"}
-
+	
 	-- if terminator is a quote do a special routine to crack out \" into a quote
 	if terminator == "\"" then return tokenize_string(rawtext) end
 	
 	if rawtext == "" or terminator == "" then return nil end
 	
-	local eot = string.find(rawtext, terminator, 1, true) -1 -- plain text search from start of string
-	
+	local pfx = 1
+	local eot = 1
+
+	while eot ~= nil and eot <= pfx do
+		eot = string.find(rawtext, terminator, pfx, true) -- plain text search from start of string
+		pfx = pfx + 1
+	end
+	if eot == nil then
+		return string.sub(rawtext, pfx-1), ""
+	end
+	eot = eot - 1
 	local sot = eot + 2
 	while string.sub(rawtext, sot, sot) == terminator do sot = sot + 1 end
-	return {string.sub(rawtext, 1, eot), string.sub(rawtext, sot)}
+	return string.sub(rawtext, pfx, eot), string.sub(rawtext, sot)
 end
+
 
 function bootstrap(dict)
 	local cfa = function(w) return dict.cfa("context", w) end
 	
-	print("DICT", dict)
-
+	dict.primary(
+		"context",
+		"DUMP", -- print out the dictionary
+		[[
+			--print(cpu.dict)
+			print("DUMP DICT")
+			return cpu.next
+		]]
+	)
+	
+	
+	dict.primary(
+		"context",
+		"DUMS", -- print out the dictionary
+		[[
+			print(cpu.DS)
+			return cpu.next
+		]]
+	)
+	
 	dict.primary(
 		"context",
 		"colon", -- /* execute a wordlist */
@@ -469,7 +547,7 @@ function bootstrap(dict)
 				cpu.DS.push(false)
 				return cpu.next
 			end
-			cpu.token, cpu.pad = tokenize(cpu.DS.pop(), cpu.pad)
+			cpu.token, cpu.pad = tokenize(term, cpu.pad)
 			cpu.DS.push(true)
 			return cpu.next
 		]]
@@ -489,7 +567,7 @@ function bootstrap(dict)
 		"(value)", --  /* ( -- n ) push the contents of the next cell */
 		[[
 			cpu.DS.push(cpu.dict[cpu.i])
-			cpu.i = cpu.i + 1}
+			cpu.i = cpu.i + 1
 			return cpu.next
 		]]
 	)
@@ -736,8 +814,6 @@ function bootstrap(dict)
 		}
 	)
 	
-	print(dict)
-	
 	dict.secondary(
 		"context",
 		"?execute", -- /* ( -- ) execute the word if it's immediate (i think)  */
@@ -844,5 +920,22 @@ function bootstrap(dict)
 	)
 	
 	-- now we should be able to just parse raw text
+end
+
+function write_dict(dict, fn)
+	fid = io.open(fn, "w+")
+	fid:write(tostring(dict))
+	fid:close()
+end
+
+
+Cpus = {}
+
+Spawn = function()
+	Cpus[#Cpus+1] = Cpu()
+	bootstrap(Cpus[#Cpus].dict)
+	write_dict(Cpus[#Cpus].dict, "def.dict.txt")
+	Cpus[#Cpus].thread = coroutine.create(Cpus[#Cpus].inner)
+	return #Cpus
 end
 
