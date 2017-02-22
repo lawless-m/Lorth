@@ -361,27 +361,7 @@ end
 
 function bootstrap(dict)
 	local cfa = function(w) return dict.cfa("context", w) end
-	
-	dict.primary(
-		"context",
-		"DUMP", -- print out the dictionary
-		[[
-			--print(cpu.dict)
-			print("DUMP DICT")
-			return cpu.next
-		]]
-	)
-	
-	
-	dict.primary(
-		"context",
-		"DUMS", -- print out the dictionary
-		[[
-			print(cpu.DS)
-			return cpu.next
-		]]
-	)
-	
+		
 	dict.primary(
 		"context",
 		"colon", -- /* execute a wordlist */
