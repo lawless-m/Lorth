@@ -4,20 +4,23 @@ dofile("TIL.lua")
 
 cpuN = Spawn()
 
-io.write("> ")
+io.write("L> ")
 io.flush()
 for line in io.lines() do
-	print(">>" .. line .. "<<")
-	if line == "DICT" then
+	if line == "EXIT" then
+		os.exit(true, true)
+	elseif line == "DICT" then
 		print(Cpus[cpuN].dict)
 	elseif line == "DS" then
 		print(Cpus[cpuN].DS)
 	elseif line == "RS" then
 		print(Cpus[cpuN].RS)
+	elseif line == "JS" then
+		print(Cpus[cpuN].RS)
 	else
 		Cpus[cpuN].input(line)
 	end	
-	io.write("> ")
+	io.write("L> ")
 	io.flush()
 end
 

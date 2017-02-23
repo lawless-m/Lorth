@@ -1,5 +1,20 @@
 -- Simple Stack
 
+function warn(msg)
+	-- io.stderr:write(msg)
+	io.write("WARN: " .. msg .. "\n")
+	io.flush()
+end
+
+tracef = io.open("trace.txt", "w+")
+--tracef:close()
+
+function trace(msg)
+	--tracef = io.open("trace.txt", "a+")
+	tracef:write("TRACE: " .. msg .. "\n")
+	tracef:flush()
+end
+
 Stack = function()
 	local stack = {n=1} -- n next position to write to
 	stack.trunc = 
@@ -18,7 +33,7 @@ Stack = function()
 			if stack.n > 1 then
 				v = stack[stack.n]
 			else
-				-- UNDERFLOW warn("Stack underflow")
+				warn("Stack underflow")
 				v = nil
 			end
 			return v
@@ -31,22 +46,29 @@ Stack = function()
 		end
 	stack.pop = 
 		function()
+			local v
 			if stack.n > 1 then
 				stack.n = stack.n - 1
-				local v = stack[stack.n]
+				v = stack[stack.n]
 				stack[stack.n] = nil
-				return v
+			else
+				warn("Stack underflow")
+				v = nil
 			end
-			-- WARN UNDERFLOW
-			return nil	
+
+			return v
 		end
 		
 	return setmetatable(stack, {__tostring = 
 		function()
 			local str = ""
 			local i
-			for i = 1,stack.n do
-				str = str .. i .. ":" .. tostring(stack[i]) .. "\n"
+			for i = 1,#stack do
+				if type(stack[i]) == "string" then
+					str = str .. i .. ":\"" .. tostring(stack[i]) .. "\"\n"
+				else
+					str = str .. i .. ":" .. tostring(stack[i]) .. "\n"
+				end
 			end
 			return str		
 		end
@@ -138,10 +160,10 @@ Dict = function()
 		function(vocab, word, fntxt)
 			local nfa, cfa, pfa = dict.header(vocab, word)
 			dict[cfa] = pfa -- cell with the function pointer to execute
-			fn = load("cpu=...;" .. fntxt)
+			fn = load("trace(\"" .. vocab .. "/" .. word .. "\");" .. "cpu=...;" .. fntxt)
 			if fn == nil then
-				print(fntxt)
-				error("Compile failed")
+				warn(fntxt)
+				warn("Compile failed")
 			end
 			dict[pfa] = fn
 			--dict[pfa+1] = fntxt
@@ -202,7 +224,6 @@ Dict = function()
 	dict.word_totable =
 		function(prev_nfa)
 			return {
-				
 				word = dict[nfa],
 				vocab = dict[nfa+1],
 				lfa = dict[nfa_to_lfa(nfa)],
@@ -280,12 +301,12 @@ Cpu = function()
 			fns[cpu.next] = "next"
 			fns[cpu.execute] = "execute"
 			fns[cpu.semi] = "semi"
-			printfn = function(fa)
+			tracefn = function(fa)
 					if fns[fa] == nil then
 						d_w, d_v = locate_fn(cpu, fa)
-						print(fa, d_v .. "/" .. d_w)
+						trace(tostring(fa) .. "\t" .. d_v .. "/" .. d_w)
 					else
-						print(fa, fns[fa])
+						trace(tostring(fa) .. "\t" .. fns[fa])
 					end
 				end
 			while cpu.i ~= "exit" do
@@ -305,14 +326,20 @@ Cpu = function()
 			
 	cpu.input =
 		function(input)
-			cpu.dict[-100] = cpu.dict.cfa("context", "outer")
+		  cpu.dict[-100] = cpu.dict.cfa("context", "outer")
 			cpu.dict[-99] = nil
 			cpu.i = -100
-			cpu.pad = cpu.pad .. " " .. input
+		--	cpu.i = 275 -- cpu.dict.cfa("context", "outer")
+			if cpu.pad == "" then
+				cpu.pad = input
+			else
+				cpu.pad = cpu.pad .. " " .. input
+			end
+			
 			coroutine.resume(cpu.thread)
 			cpu.dict[-100] = nil
 			cpu.dict[-99] = nil
-			
+			cpu.RS.pop()
 		end
 		
 	return cpu
@@ -337,6 +364,8 @@ end
 function tokenize(terminator, rawtext) 
 	-- split at the terminator, return text before the terminator and text after the terminator stops repeating (e.g. ("-", "ab--cd-") returns {"ab", "cd-"}
 	
+	trace("TOKENIZE Term>>" .. terminator .. "<< raw>>" .. rawtext .. "<<")
+	
 	-- if terminator is a quote do a special routine to crack out \" into a quote
 	if terminator == "\"" then return tokenize_string(rawtext) end
 	
@@ -350,17 +379,28 @@ function tokenize(terminator, rawtext)
 		pfx = pfx + 1
 	end
 	if eot == nil then
+		trace("TOK:\"" .. string.sub(rawtext, pfx-1) .. "\" PAD:\"\"")
 		return string.sub(rawtext, pfx-1), ""
 	end
 	eot = eot - 1
 	local sot = eot + 2
 	while string.sub(rawtext, sot, sot) == terminator do sot = sot + 1 end
+	trace("TOK:\"" .. string.sub(rawtext, pfx, eot) .. "\" PAD:\"" .. string.sub(rawtext, sot) .. "\"")
 	return string.sub(rawtext, pfx, eot), string.sub(rawtext, sot)
 end
 
 
 function bootstrap(dict)
 	local cfa = function(w) return dict.cfa("context", w) end
+	
+	dict.primary(
+		"context",
+		"!!", -- first entry in the DICT, used for debugging
+		[[
+			warn("!!")
+			return cpu.next
+		]]
+		)
 		
 	dict.primary(
 		"context",
@@ -583,6 +623,7 @@ function bootstrap(dict)
 		"context",
 		"search", -- /* ( -- (false wa) | true ) search the dictionary for "word" push the wa and a flag for (not found) */
 		[[
+			trace("search: for \"" .. cpu.token .. "/" .. cpu.vocabulary .. "\"")
 			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
 			if wa then
 				cpu.DS.push(wa)
@@ -673,7 +714,11 @@ function bootstrap(dict)
 		"context",
 		"cfa", -- /* ( NFA -- CFA) push Code Field Address for the given Name Field Address , just arithmetic */
 		[[
-			cpu.DS.push(nfa_to_cfa(cpu.DS.pop()))
+			local nfa = cpu.DS.pop()
+			trace("NFA:" .. nfa)
+			local cfa = nfa_to_cfa(nfa)
+			trace("CFA:" .. cfa)
+			cpu.DS.push(cfa)
 			return cpu.next
 		]]
 	)
@@ -713,7 +758,7 @@ function bootstrap(dict)
 		"context",
 		"tokenerror", --  { /* ( -- ) report an unrecognised word error */
 		[[
-			io.stderr.write(">>" .. cpu.token .. "<< error, unrecognised word (inside the >><<)")
+			warn(">>" .. cpu.token .. "<< error, unrecognised word (inside the >><<)")
 			return cpu.next
 		]]
 	)
@@ -753,7 +798,9 @@ function bootstrap(dict)
 		"context",
 		"(rjmp)", -- /* ( -- ) unconditional jump by the delta in the next cell */
 		[[
+			trace("(rjmp) getting relative address from " .. cpu.i)
 			cpu.i = cpu.i + cpu.dict[cpu.i]
+			trace("(rjmp) to " .. cpu.i)
 			return cpu.next
 		]]
 	)
@@ -860,7 +907,7 @@ function bootstrap(dict)
 						4,
 					cfa("?execute"),
 					cfa("(rjmp)")
-					-15,
+					-14,
 		}
 	)
 	

@@ -1,1 +1,5 @@
 *.out
+*.deuser
+Lorth.deproj
+trace.txt
+def.dict.txt
