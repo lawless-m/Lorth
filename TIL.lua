@@ -309,7 +309,7 @@ Cpu = function()
 						trace(tostring(fa) .. "\t" .. fns[fa])
 					end
 				end
-			while cpu.i ~= "exit" do
+			--while cpu.i ~= "exit" do
 				if cpu.pad ~= "" then
 					n = cpu.dict.n
 					f = cpu.next
@@ -320,8 +320,8 @@ Cpu = function()
 						cpu.dict.n = n
 					end
 				end
-				coroutine.yield()
-			end
+			--	coroutine.yield()
+			--end
 		end
 			
 	cpu.input =
@@ -336,10 +336,15 @@ Cpu = function()
 				cpu.pad = cpu.pad .. " " .. input
 			end
 			
-			coroutine.resume(cpu.thread)
+			--coroutine.resume(cpu.thread)
+			cpu.inner()	
+			
 			cpu.dict[-100] = nil
 			cpu.dict[-99] = nil
+			
+			
 			cpu.RS.pop()
+			
 		end
 		
 	return cpu
@@ -361,32 +366,36 @@ function tokenize_string(rawtext)
 	return out .. t[1], t[2]
 end
 
-function tokenize(terminator, rawtext) 
+function tokenize_bySpc(rawtext) 
+  i = 1
+	for tok,pad in string.gmatch(rawtext, " *([^ ]+) +(.*)")  do
+		return tok, pad
+  end
+  tok = string.match(rawtext, " *([^ ]+)")
+  if tok == nil then
+	return "", ""
+else
+	return tok, ""
+  end
+end
+
+
+function tokenize(pattern, rawtext) 
 	-- split at the terminator, return text before the terminator and text after the terminator stops repeating (e.g. ("-", "ab--cd-") returns {"ab", "cd-"}
 	
 	trace("TOKENIZE Term>>" .. terminator .. "<< raw>>" .. rawtext .. "<<")
 	
+	if pattern == " " and rawtext ~= "" then 
+		return tokenize_bySpc(rawtext)
+	end
+	
 	-- if terminator is a quote do a special routine to crack out \" into a quote
 	if terminator == "\"" then return tokenize_string(rawtext) end
+	if rawtext == "" or terminator == "" then return "", "" end
 	
-	if rawtext == "" or terminator == "" then return nil end
+	-- ANYTHING ELSE DOESN'T WORK
 	
-	local pfx = 1
-	local eot = 1
-
-	while eot ~= nil and eot <= pfx do
-		eot = string.find(rawtext, terminator, pfx, true) -- plain text search from start of string
-		pfx = pfx + 1
-	end
-	if eot == nil then
-		trace("TOK:\"" .. string.sub(rawtext, pfx-1) .. "\" PAD:\"\"")
-		return string.sub(rawtext, pfx-1), ""
-	end
-	eot = eot - 1
-	local sot = eot + 2
-	while string.sub(rawtext, sot, sot) == terminator do sot = sot + 1 end
-	trace("TOK:\"" .. string.sub(rawtext, pfx, eot) .. "\" PAD:\"" .. string.sub(rawtext, sot) .. "\"")
-	return string.sub(rawtext, pfx, eot), string.sub(rawtext, sot)
+	return "", ""
 end
 
 
@@ -962,7 +971,8 @@ Spawn = function()
 	Cpus[#Cpus+1] = Cpu()
 	bootstrap(Cpus[#Cpus].dict)
 	write_dict(Cpus[#Cpus].dict, "def.dict.txt")
-	Cpus[#Cpus].thread = coroutine.create(Cpus[#Cpus].inner)
+	-- Cpus[#Cpus].thread = coroutine.create(Cpus[#Cpus].inner)
+	
 	return #Cpus
 end
 

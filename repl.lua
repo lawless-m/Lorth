@@ -19,7 +19,9 @@ for line in io.lines() do
 		print(Cpus[cpuN].RS)
 	else
 		Cpus[cpuN].input(line)
+
 	end	
+	
 	io.write("L> ")
 	io.flush()
 end
