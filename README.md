@@ -1,16 +1,16 @@
-Using Miniforth from Lua Gems to bootstrap a Forth for the game Factorio
+Using my TIL and someone elses' mod to bootstrap a Forth for the game Factorio
 
 To work in Factorio it needs the LuaCombinator Mod
 
 Doesn't work yet, this is me getting started
 
+Forth
+=====
 
-Miniforth
-=========
+Not an ANSI Forth but a Threaded Interpretive Language built from the text of Loeliger's book - Threaded Interpretive Languages 
 
-Boostrapping a Forth in 40 lines of Lua code
+http://www.retroprogramming.com/2010/03/threaded-interpretive-languages-by-r-g.html
 
-http://angg.twu.net/miniforth-article.html
 
 Factorio
 ========
