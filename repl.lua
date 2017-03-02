@@ -16,7 +16,7 @@ for line in io.lines() do
 	elseif line == "RS" then
 		print(Cpus[cpuN].RS)
 	elseif line == "JS" then
-		print(Cpus[cpuN].RS)
+		print(Cpus[cpuN].JS)
 	else
 		Cpus[cpuN].input(line)
 
