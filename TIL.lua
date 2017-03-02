@@ -15,8 +15,11 @@ function trace(msg)
 	tracef:flush()
 end
 
-Stack = function()
-	local stack = {n=1} -- n next position to write to
+Stack = function(nm)
+	if nm == nil then
+		nm = ""
+	end
+	local stack = {n=1, name=nm} -- n next position to write to
 	stack.trunc = 
 		function(i) 
 			local k
@@ -33,7 +36,7 @@ Stack = function()
 			if stack.n > 1 then
 				v = stack[stack.n]
 			else
-				warn("Stack underflow")
+				warn("TOP: Stack underflow, " .. stack.name)
 				v = nil
 			end
 			return v
@@ -52,26 +55,28 @@ Stack = function()
 				v = stack[stack.n]
 				stack[stack.n] = nil
 			else
-				warn("Stack underflow")
+				
 				v = nil
 			end
 
 			return v
 		end
 		
-	return setmetatable(stack, {__tostring = 
+	stack.stringify = 
 		function()
-			local str = ""
+			local str = "Stack " .. stack.name .. "\n"
 			local i
 			for i = 1,#stack do
 				if type(stack[i]) == "string" then
-					str = str .. i .. ":\"" .. tostring(stack[i]) .. "\"\n"
+					str = str .. " " .. i .. ":\"" .. tostring(stack[i]) .. "\"\n"
 				else
-					str = str .. i .. ":" .. tostring(stack[i]) .. "\n"
+					str = str .. " " .. i .. ":" .. tostring(stack[i]) .. "\n"
 				end
 			end
 			return str		
 		end
+		
+	return setmetatable(stack, {__tostring = stack.stringify
 		})
 
 end
@@ -144,8 +149,9 @@ end
 ----------
 
 Dict = function()
-	local dict = Stack()
+	local dict = Stack("DICT")
 	dict.entry = 0
+	dict.dumpi = 0
 
 	dict.header =
 		function(vocab, word)
@@ -166,8 +172,8 @@ Dict = function()
 				warn("Compile failed")
 			end
 			dict[pfa] = fn
-			--dict[pfa+1] = fntxt
-			dict.n = pfa + 1
+			dict[pfa+1] = fntxt
+			dict.n = pfa + 2
 			dict.entry = nfa
 			return nfa
 		end
@@ -231,14 +237,65 @@ Dict = function()
 			}
 		end
 		
-	--[[setmetatable(dict, {__tostring=
+	dict.stringify =
 		function() 
+			local nfa, lfa, cfa, pfa, j, k, infa, ivoc, icfa, pword
+			local s = "dict.entry: " .. dict.entry .. "\n"
+			s = s .. "dict.n: " .. dict.n .. "\n"
+			local nfa = dict.entry
+			k = dict.n
 		
-		return "HEY" 
+			while nfa > 0 do
+				s = s .. "\n\n---------\n".. nfa .. " NFA " .. tostring(dict[nfa_to_vocab(nfa)]) .. " / " .. tostring(dict[nfa]) .. "\n"	
+				lfa = nfa_to_lfa(nfa)
+				s = s .. lfa .. " LFA " .. tostring(dict[lfa]) .. "\n"	
+				cfa = nfa_to_cfa(nfa)
+				pfa = nfa_to_pfa(nfa)
+				if type(dict[pfa]) == "function" then
+					s = s .. cfa .. " CFA " .. tostring(dict[cfa]) .. "\n"	
+					s = s .. pfa .. " PFA " .. tostring(dict[pfa]) .. "\n"
+					s = s .. pfa+1 .. " LUA " .. tostring(dict[pfa+1]) .. "\n"
+				else
+					infa = pfa_to_nfa(dict[cfa])
+					if type(infa) == "number" then
+						ivoc = tostring(dict[nfa_to_vocab(infa)])
+						infa = tostring(dict[infa])
+					end
+					s = s .. cfa .. " CFA " .. tostring(dict[cfa]) .. " - " .. ivoc .. " / " .. infa .. "\n"	
+					
+					j = pfa
+					while j < k do
+						if pword == "context / (value)" or pword == "context / (if!rjmp)" or pword == "context / (rjmp)" then
+							s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
+							pword = nil
+						elseif type(dict[j]) == "number" then
+							icfa = dict[j]
+							if type(icfa) == "number" then
+								infa = cfa_to_nfa(icfa)
+								ivoc = tostring(dict[nfa_to_vocab(infa)])
+								infa = tostring(dict[infa])
+								pword = ivoc .. " / " .. infa
+								s = s .. j .. " P " .. tostring(dict[j]) .. " - " .. pword .. "\n"	
+							else
+								s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
+								pword = nil
+							end
+						else
+							s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
+							pword = nil
+						end
+						j = j + 1
+					end
+				end
+				k, nfa = nfa, dict[lfa]
+			end
+
+			return s
 		
-		end})
-		]]--
+		end
 		
+	setmetatable(dict, {__tostring=dict.stringify})
+	
 	return dict
 end
 
@@ -248,10 +305,10 @@ Cpu = function()
 		i = 0,
 		cfa = 0,
 		pad = "",
-		DS = Stack(),
-		RS = Stack(),
-		JS = Stack(),
-		dict = Dict(),
+		DS = Stack("DS"),
+		RS = Stack("RS"),
+		JS = Stack("JS"),
+		dict = Dict("CPUDICT"),
 		mode = false,
 		state = false,
 		vocabulary = "context",
@@ -343,7 +400,7 @@ Cpu = function()
 			cpu.dict[-99] = nil
 			
 			
-			cpu.RS.pop()
+			-- cpu.RS.pop()
 			
 		end
 		
@@ -383,15 +440,15 @@ end
 function tokenize(pattern, rawtext) 
 	-- split at the terminator, return text before the terminator and text after the terminator stops repeating (e.g. ("-", "ab--cd-") returns {"ab", "cd-"}
 	
-	trace("TOKENIZE Term>>" .. terminator .. "<< raw>>" .. rawtext .. "<<")
+	trace("TOKENIZE Term>>" .. pattern .. "<< raw>>" .. rawtext .. "<<")
 	
 	if pattern == " " and rawtext ~= "" then 
 		return tokenize_bySpc(rawtext)
 	end
 	
 	-- if terminator is a quote do a special routine to crack out \" into a quote
-	if terminator == "\"" then return tokenize_string(rawtext) end
-	if rawtext == "" or terminator == "" then return "", "" end
+	if pattern == "\"" then return tokenize_string(rawtext) end
+	if pattern == "" or terminator == "" then return "", "" end
 	
 	-- ANYTHING ELSE DOESN'T WORK
 	
@@ -410,6 +467,19 @@ function bootstrap(dict)
 			return cpu.next
 		]]
 		)
+		
+	dict.primary(
+		"context",
+		"dumpi", -- dump the dict to numbered file, used for debugging
+		[[
+			cpu.dict.dumpi = cpu.dict.dumpi+1
+			print("WTF")
+			dfn = io.open("dump.dict." .. cpu.dict.dumpi .. ".txt", "w+")
+			dfn:write(tostring(cpu.dict))
+			dfn:close()
+			return cpu.next
+		]]
+	)
 		
 	dict.primary(
 		"context",
@@ -495,7 +565,7 @@ function bootstrap(dict)
 		"context",
 		"here", -- /* ( - DP )  push dictionary pointer */
 		[[
-			cpu.DS.push(cpu.DS.n)
+			cpu.DS.push(cpu.dict.n)
 			return cpu.next
 		]]
 	)
@@ -504,7 +574,9 @@ function bootstrap(dict)
 		"context",
 		"there", -- /* (NEWDP - ) pop to the dictionary pointer */
 		[[
-			cpu.DS.n = (cpu.DS.pop())
+
+			cpu.DS.n = cpu.DS.pop()
+
 			return cpu.next
 		]]
 	)
@@ -522,8 +594,10 @@ function bootstrap(dict)
 		"context",
 		"tuck", -- /* ( b a -- a b a ) copy tos to 3rd place, could just be : tuck swap over ; */
 		[[
+
 			local a = cpu.DS.pop()
 			local b = cpu.DS.pop()
+
 			cpu.DS.push(a)
 			cpu.DS.push(b)
 			cpu.DS.push(a)
@@ -553,7 +627,9 @@ function bootstrap(dict)
 		"context",
 		"execute", -- /* ( -- wa ) run the word with its address on the tos */
 		[[
+
 			cpu.cfa = cpu.DS.pop()
+
 			return cpu.run
 		]]
 	)
@@ -562,7 +638,9 @@ function bootstrap(dict)
 		"context",
 		"token", -- /* ( token -- ) extract everything in cpu.pad until the terminator, and put it in the dictionary */
 		[[
+
 			cpu.token, cpu.pad = tokenize(cpu.DS.pop(), cpu.pad)
+
 			return cpu.next
 		]]
 	)
@@ -605,7 +683,9 @@ function bootstrap(dict)
 		"context",
 		",", -- /* ( val -- ) store tos in the next cell */
 		[[
+
 			cpu.dict.push(cpu.DS.pop())
+
 			return cpu.next
 		]]
 	)
@@ -614,7 +694,9 @@ function bootstrap(dict)
 		"context",
 		"drop", -- /* ( a -- ) drop the tos */
 		[[
+
 			cpu.DS.pop()
+
 			return cpu.next
 		]]
 	)
@@ -623,7 +705,18 @@ function bootstrap(dict)
 		"context",
 		"ca", -- /* ( "word" -- ca|undefined ) push code address or nil on tos */
 		[[
-			cpu.DS.push(cpu.dict.ca(cpu.vocabulary, cpu.DS.pop()))
+		trace("ca: " .. tostring(cpu.DS))
+
+			local top = cpu.DS.pop()
+			if top then
+				cpu.DS.push(cpu.dict.ca(cpu.vocabulary, top))
+			else
+				cpu.DS.push(nil)
+			end
+
+				
+		trace("vocab: " .. cpu.vocabulary .. " TOP=" .. tostring(top) .. " ")
+		
 			return cpu.next
 		]]
 	)
@@ -657,7 +750,9 @@ function bootstrap(dict)
 		"context",
 		">mode", --  /* ( mode -- ) set the current mode */
 		[[
+
 			cpu.mode = (cpu.DS.pop() == true)
+
 			return cpu.next
 		]]
 	)
@@ -675,7 +770,9 @@ function bootstrap(dict)
 		"context",
 		">state", -- /* ( state -- ) set the current state */
 		[[
+
 			cpu.state = (cpu.DS.pop() == true)
+
 			return cpu.next
 		]]
 	)
@@ -684,7 +781,9 @@ function bootstrap(dict)
 		"context",
 		">vocabulary", -- /* ( vocabulary -- ) set the current vocabulary */
 		[[
+
 			cpu.vocabulary = cpu.DS.pop()
+
 			return cpu.next		
 		]]
 	)
@@ -705,7 +804,9 @@ function bootstrap(dict)
 		"context",
 		">entry", -- /* ( -- ) write to cpu.dict.entry */
 		[[
+
 			cpu.dict.entry = cpu.DS.pop()
+
 			return cpu.next
 		]]
 	)
@@ -915,8 +1016,8 @@ function bootstrap(dict)
 						cfa("(rjmp)"),
 						4,
 					cfa("?execute"),
-					cfa("(rjmp)")
-					-14,
+					cfa("(rjmp)"),
+					-15,
 		}
 	)
 	
@@ -933,7 +1034,7 @@ function bootstrap(dict)
 			cfa("ca"),
 			cfa(","),
 			cfa("t"),
-			cfa(">mode"),
+			cfa(">mode")
 		}
 	)
 	
