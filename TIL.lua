@@ -15,6 +15,70 @@ function trace(msg)
 	tracef:flush()
 end
 
+Word = function(dict, nfa, efa)
+	if type(nfa) ~= "number" or type(efa) ~= "number" then
+		return
+	end
+	
+	local word = {
+		nfa = nfa,
+		vocaba = nfa_to_vocab(nfa),
+		lfa = nfa_to_lfa(nfa),
+		cfa = nfa_to_cfa(nfa),
+		pfa = nfa_to_pfa(nfa),
+		efa = efa,
+	}
+	
+	if type(word.vocaba) ~= "number" or type(word.lfa) ~= "number" or type(word.cfa) ~= "number" or type(word.pfa) ~= "number" then
+		return
+	end
+		
+	setmetatable(word, {__tostring=
+		function()
+			s = "---------\n".. word.nfa .. " NFA " .. tostring(dict[word.vocaba]) .. " / " .. tostring(dict[word.nfa]) .. "\n"	
+			s = s .. word.lfa .. " LFA " .. tostring(dict[word.lfa]) .. "\n"	
+			if type(dict[word.pfa]) == "function" then
+				s = s .. word.cfa .. " CFA " .. tostring(dict[word.cfa]) .. "\n"	
+				s = s .. word.pfa .. " PFA " .. tostring(dict[word.pfa]) .. "\n"
+				s = s .. word.pfa+1 .. " LUA " .. tostring(dict[word.pfa+1]) .. "\n"
+			else
+				infa = pfa_to_nfa(dict[word.cfa])
+				if type(infa) == "number" then
+					ivoc = tostring(dict[nfa_to_vocab(infa)])
+					infa = tostring(dict[infa])
+				end
+				s = s .. word.cfa .. " CFA " .. tostring(dict[word.cfa]) .. " - " .. ivoc .. " / " .. infa .. "\n"	
+				
+				for j = word.pfa, word.efa do
+					if pword == "context / (value)" or pword == "context / (if!rjmp)" or pword == "context / (rjmp)" then
+						s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
+						pword = nil
+					elseif type(dict[j]) == "number" then
+						icfa = dict[j]
+						if type(icfa) == "number" then
+							infa = cfa_to_nfa(icfa)
+							ivoc = tostring(dict[nfa_to_vocab(infa)])
+							infa = tostring(dict[infa])
+							pword = ivoc .. " / " .. infa
+							s = s .. j .. " P " .. tostring(dict[j]) .. " - " .. pword .. "\n"	
+						else
+							s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
+							pword = nil
+						end
+					else
+						s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
+						pword = nil
+					end
+					j = j + 1
+				end
+			end
+			return s
+		end
+	})
+	
+	return word
+end
+
 Stack = function(nm)
 	if nm == nil then
 		nm = ""
@@ -76,8 +140,7 @@ Stack = function(nm)
 			return str		
 		end
 		
-	return setmetatable(stack, {__tostring = stack.stringify
-		})
+	return setmetatable(stack, {__tostring = stack.stringify})
 
 end
 
@@ -227,67 +290,20 @@ Dict = function()
 			return {v, w}
 		end
 		
-	dict.word_totable =
-		function(prev_nfa)
-			return {
-				word = dict[nfa],
-				vocab = dict[nfa+1],
-				lfa = dict[nfa_to_lfa(nfa)],
-				cf = 0
-			}
-		end
-		
+	
 	dict.stringify =
 		function() 
-			local nfa, lfa, cfa, pfa, j, k, infa, ivoc, icfa, pword
 			local s = "dict.entry: " .. dict.entry .. "\n"
 			s = s .. "dict.n: " .. dict.n .. "\n"
 			local nfa = dict.entry
-			k = dict.n
+			local efa = dict.n-1
 		
 			while nfa > 0 do
-				s = s .. "\n\n---------\n".. nfa .. " NFA " .. tostring(dict[nfa_to_vocab(nfa)]) .. " / " .. tostring(dict[nfa]) .. "\n"	
-				lfa = nfa_to_lfa(nfa)
-				s = s .. lfa .. " LFA " .. tostring(dict[lfa]) .. "\n"	
-				cfa = nfa_to_cfa(nfa)
-				pfa = nfa_to_pfa(nfa)
-				if type(dict[pfa]) == "function" then
-					s = s .. cfa .. " CFA " .. tostring(dict[cfa]) .. "\n"	
-					s = s .. pfa .. " PFA " .. tostring(dict[pfa]) .. "\n"
-					s = s .. pfa+1 .. " LUA " .. tostring(dict[pfa+1]) .. "\n"
-				else
-					infa = pfa_to_nfa(dict[cfa])
-					if type(infa) == "number" then
-						ivoc = tostring(dict[nfa_to_vocab(infa)])
-						infa = tostring(dict[infa])
-					end
-					s = s .. cfa .. " CFA " .. tostring(dict[cfa]) .. " - " .. ivoc .. " / " .. infa .. "\n"	
-					
-					j = pfa
-					while j < k do
-						if pword == "context / (value)" or pword == "context / (if!rjmp)" or pword == "context / (rjmp)" then
-							s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
-							pword = nil
-						elseif type(dict[j]) == "number" then
-							icfa = dict[j]
-							if type(icfa) == "number" then
-								infa = cfa_to_nfa(icfa)
-								ivoc = tostring(dict[nfa_to_vocab(infa)])
-								infa = tostring(dict[infa])
-								pword = ivoc .. " / " .. infa
-								s = s .. j .. " P " .. tostring(dict[j]) .. " - " .. pword .. "\n"	
-							else
-								s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
-								pword = nil
-							end
-						else
-							s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
-							pword = nil
-						end
-						j = j + 1
-					end
+				local w = Word(dict, nfa, efa)
+				if w then
+					s = s .. tostring(w)
+					efa, nfa = nfa-1, dict[w.lfa]
 				end
-				k, nfa = nfa, dict[lfa]
 			end
 
 			return s
