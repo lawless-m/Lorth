@@ -44,19 +44,21 @@ pfa_to_lfa = function(n)  return n - 2 end
 pfa_to_voa = function(n)  return n - header_size end
 pfa_to_nfa = function(n)  return n - (header_size + 1) end
 
--- not just arithmetic
+-- not just arithmetic, this walks the dict
 function nfa_to_efa(dict, nfa)
 	if type(nfa) ~= "number" then
 		warn("NFA not a number")
 		return
 	end
-	local efa = dict.entry
-	local k = nfa
+	
+	local efa = dict.n
+	local k = dict.entry
+	
 	while k > 0 do
 		if k == nfa then
 			return efa - 1
 		end
-		k = dict[nfa_to_lfa(nfa)]
+		k, efa = dict[nfa_to_lfa(k)], k
 	end
 end
 	
@@ -76,6 +78,7 @@ function fn_to_nfa(dict, fn)
 			return nfa
 		end
 		nfa = dict[nfa_to_lfa(nfa)]
+		if nfa == nil then nfa = 0 end
 	end
 	trace("fn not found")
 end

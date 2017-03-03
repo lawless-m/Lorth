@@ -1,7 +1,7 @@
 
 
 Word = function(dict, nfa, efa)
-	print("NFA " .. tostring(nfa) .. " EFA " .. tostring(efa))
+
 	if type(nfa) ~= "number" then
 		return
 	end
