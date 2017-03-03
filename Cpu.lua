@@ -58,18 +58,24 @@ Cpu = function()
 			fns[cpu.next] = "next"
 			fns[cpu.execute] = "execute"
 			fns[cpu.semi] = "semi"
+			tracefn = function()
+				if fns[f] ~= nil then
+					trace("CPU." .. fns[f])
+				else
+					w = Word(cpu.dict, fn_to_nfa(cpu.dict, f))
+					trace("CPU " .. tostring(cpu))
+					trace("Word " .. tostring(w))
+				end
+				trace(">")
+			end
+			
 			--while cpu.i ~= "exit" do
 				if cpu.pad ~= "" then				
 					n = cpu.dict.n
 					f = cpu.next
 					while type(f) == "function" do
-						w = Word(cpu.dict, fn_to_nfa(cpu.dict, f))
-						trace("CPU " .. tostring(cpu))
-						trace("Word " .. tostring(w))
-						
+						tracefn()
 						f = f(cpu)
-
-						trace("")
 					end
 					if cpu.pad ~= "" then
 						cpu.dict.n = n

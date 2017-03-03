@@ -67,9 +67,7 @@ function fn_to_nfa(dict, fn)
 		warn("fn not a function")
 		return
 	end
-	
-	trace("Fn " .. tostring(fn))
-	
+		
 	local nfa = dict.entry
 	local cfa
 	while nfa > 0 do
