@@ -63,10 +63,14 @@ Cpu = function()
 					trace("CPU." .. fns[f])
 				else
 					w = Word(cpu.dict, fn_to_nfa(cpu.dict, f))
-					trace("CPU " .. tostring(cpu))
-					trace("Word " .. tostring(w))
+					--trace("CPU " .. tostring(cpu))
+					if w then
+						trace("Word " .. tostring(w.label))
+					else
+						trace("Word nil")
+					end
 				end
-				trace(">")
+				--trace(">")
 			end
 			
 			--while cpu.i ~= "exit" do

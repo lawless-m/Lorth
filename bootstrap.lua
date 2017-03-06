@@ -470,7 +470,7 @@ function bootstrap(dict)
 	
 	dict.secondary(
 		"context",
-		"?search", --  /*  ( -- flag ) search the dictionaries for the word in the pad flag is not found */
+		"X?search", --  /*  ( -- flag ) search the dictionaries for the word in the pad flag is not found */
 		{
 			cfa("search"), 
 			cfa("dup"), 
@@ -493,6 +493,22 @@ function bootstrap(dict)
 						true,
 						cfa(">state"),
 		}
+	)
+	
+	dict.primary(
+		"context",
+		"?search",
+		[[
+			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token) or cpu.dict.cfa("compile", cpu.token) or cpu.dict.cfa("context", cpu.token)
+			if wa then
+				cpu.DS.push(wa)
+				cpu.DS.push(false)
+				return cpu.next
+			else
+				cpu.DS.push(true)
+			end
+			return cpu.next
+		]]
 	)
 	
 	dict.secondary(
