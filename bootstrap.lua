@@ -47,8 +47,10 @@ function bootstrap(dict)
 		"compile", 
 		";",  --  /* ( -- ) finish the definition of a word */
 		[[
-			cpu.dict[cpu.dict.pointer] = cpu.dict.cfa(cpu.vocabulary, "(semi)")
-			cpu.dict.pointer = cpu.dict.pointer + 1
+	trace("CPU" .. tostring(cpu))
+	trace("HEY (semi) is " .. cpu.dict.cfa(cpu.vocabulary, "(semi)"))
+			cpu.dict[cpu.dict.n] = cpu.dict.cfa(cpu.vocabulary, "(semi)")
+			cpu.dict.n = cpu.dict.n + 1
 			cpu.mode = false
 			return cpu.next
 		]]
@@ -461,7 +463,7 @@ function bootstrap(dict)
 	
 	dict.primary(
 		"context",
-		"<cfa*", -- /* push the currrent value of cpu.cfa and exit (points to PFA in create)  */
+		"<cfa*", -- /* push the currrent value of cpu.cfa and exit (points to PFA in create) 		*/
 		[[
 			cpu.DS.push(cpu.cfa)
 			return cpu.semi
@@ -499,15 +501,36 @@ function bootstrap(dict)
 		"context",
 		"?search",
 		[[
-			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token) or cpu.dict.cfa("compile", cpu.token) or cpu.dict.cfa("context", cpu.token)
+		
+		trace("SEARCH? for " .. cpu.token)
+		
+			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
 			if wa then
 				cpu.DS.push(wa)
 				cpu.DS.push(false)
 				return cpu.next
-			else
-				cpu.DS.push(true)
 			end
+			
+		trace("CPU MODE " .. tostring(cpu.mode))
+		
+			if cpu.mode == false then
+				cpu.DS.push(true)
+				return cpu.next
+			end
+				
+			wa = cpu.dict.cfa("compile", cpu.token)
+			if wa then
+trace("FOUND ; " .. wa)			
+				cpu.DS.push(wa)
+				cpu.DS.push(false)
+				cpu.state = true
+				return cpu.next
+			end
+			
+			cpu.DS.push(true)
 			return cpu.next
+			
+			
 		]]
 	)
 	
@@ -544,18 +567,33 @@ function bootstrap(dict)
 		"context",
 		"create", -- /* ( -- ) create a dictionary entry for the next word in the pad */
 		{
-			cfa("<entry"),
-			cfa("here"),
-			cfa(">entry"),
-			cfa("<word"),
-			cfa(","),
-			cfa(",vocab"),
-			cfa(","),
-			cfa("(value)"),
-			"<cfa*",
-			cfa("ca"),
-			cfa(","),
+			cfa("<entry"), -- cpu.DS.push(cpu.dict.entry)
+			cfa("here"), -- cpu.DS.push(cpu.dict.n)
+			cfa(">entry"), -- cpu.dict.entry = cpu.DS.pop()
+			cfa("<word"), -- cpu.DS.push(" ");cpu.token, cpu.pad = tokenize(cpu.DS.pop(), cpu.pad); cpu.DS.push(cpu.token);
+			cfa(","), -- cpu.dict.push(cpu.DS.pop())
+			cfa(",vocab"), -- cpu.dict.push(cpu.vocabulary)
+			cfa(","), -- cpu.dict.push(cpu.DS.pop())
+			cfa("(value)"), -- cpu.DS.push(cpu.dict[cpu.i]); cpu.i = cpu.i + 1
+			"<cfa*", -- cpu.dict[cpu.i] from above
+			cfa("ca"), -- local top = cpu.DS.pop() ;if top then 	cpu.DS.push(cpu.dict.ca(cpu.vocabulary, top)) else 		cpu.DS.push(nil) end
+			cfa(","), -- cpu.dict.push(cpu.DS.pop())
 		}
+	)
+	
+	dict.primary(
+		"context",
+		"XXcreate", -- /* ( -- ) create a dictionary entry for the next word in the pad */
+		[[
+			local e = cpu.dict.entry
+			cpu.dict.entry = cpu.dict.n
+			cpu.token, cpu.pad = tokenize(" ", cpu.pad)
+			cpu.dict.push(cpu.token)
+			cpu.dict.push(cpu.vocabulary)
+			cpu.dict.push(e)
+			cpu.dict.push(cpu.cfa)
+			return cpu.next
+		]]
 	)
 	
 	dict.secondary(
@@ -597,7 +635,6 @@ function bootstrap(dict)
 			cfa(">mode")
 		}
 	)
-	
 	
 	dict.secondary(
 		"context",
