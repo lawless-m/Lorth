@@ -235,8 +235,8 @@ function bootstrap(dict)
 		"ca", -- /* ( "word" -- ca|undefined ) push code address or nil on tos */
 		[[
 			local top = cpu.DS.pop()
-			if topx then
-				cpu.DS.push(cpu.dict.ca(cpu.vocabulary, topx))
+			if top then
+				cpu.DS.push(cpu.dict.ca(cpu.vocabulary, top))
 			else
 				cpu.DS.push(nil)
 			end
