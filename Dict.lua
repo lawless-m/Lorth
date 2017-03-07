@@ -30,6 +30,7 @@ nfa_to_lfa = function(n)  return n + lfa_offset end
 nfa_to_voa = function(n)  return n + 1 end
 nfa_to_cfa = function(n)  return n + header_size end
 nfa_to_pfa = function(n)  return n + header_size + 1 end
+nfa_to_codetxta = function(n)  return n + header_size + 2 end
 
 lfa_to_nfa = function(n)  return n - lfa_offset end
 lfa_to_cfa = function(n)  return n + 1 end
@@ -81,6 +82,12 @@ function fn_to_nfa(dict, fn)
 	trace("fn not found")
 end
 	
+function embedded_value(label)
+	-- talk about hacky !
+	return label == "context / (value)" or 
+		   label == "context / (if!rjmp)" or 
+		   label == "context / (rjmp)"
+end	
 -------------------------
 --- DEBUGGIUNG
 
@@ -200,6 +207,28 @@ Dict = function()
 			return s
 		
 		end
+		
+	dict.secondary2primary = 
+		function(nfa) -- NOT FINISHED
+			local cfa, pfa = nfa_to_cfa(nfa), nfa_to_pfa(nfa)
+			local colon_cfa = dict.cfa("context", "colon")
+			local code_txta = nfa_to_codetxta(nfa)
+			if dict[cfa] ~=  colon_cfa then
+				return dict[code_txta]
+			end
+			
+			local code = dict[nfa_to_codetxta(colon_cfa)]
+			
+			for j in pfa, nfa_to_efa(nfa) do
+				word = Word(j)
+				code = code + "\n" + secondary2primary
+				if embedded_value(j.label) then
+				end
+			end
+		end
+	
+	
+	
 		
 	setmetatable(dict, {__tostring=dict.stringify})
 	
