@@ -10,19 +10,6 @@ function bootstrap(dict)
 			warn("!!")
 			return cpu.next
 		]]
-		)
-		
-	dict.primary(
-		"context",
-		"dumpi", -- dump the dict to numbered file, used for debugging
-		[[
-			cpu.dict.dumpi = cpu.dict.dumpi+1
-			print("WTF")
-			dfn = io.open("dump.dict." .. cpu.dict.dumpi .. ".txt", "w+")
-			dfn:write(tostring(cpu.dict))
-			dfn:close()
-			return cpu.next
-		]]
 	)
 		
 	dict.primary(
@@ -120,9 +107,7 @@ function bootstrap(dict)
 		"context",
 		"there", -- /* (NEWDP - ) pop to the dictionary pointer */
 		[[
-
-			cpu.DS.n = cpu.DS.pop()
-
+			cpu.dict.n = cpu.DS.pop()
 			return cpu.next
 		]]
 	)
@@ -253,16 +238,18 @@ function bootstrap(dict)
 		[[
 		trace("ca: " .. tostring(cpu.DS))
 
-			local top = cpu.DS.pop()
-			if top then
-				cpu.DS.push(cpu.dict.ca(cpu.vocabulary, top))
+			local topx = cpu.DS.pop()
+			
+		trace("vocab: " .. cpu.vocabulary .. " TOPX=" .. tostring(topx) .. " ")
+		
+			
+			if topx then
+			cpu.DS.push(cpu.dict.ca(cpu.vocabulary, topx))
 			else
 				cpu.DS.push(nil)
 			end
 
 				
-		trace("vocab: " .. cpu.vocabulary .. " TOP=" .. tostring(top) .. " ")
-		
 			return cpu.next
 		]]
 	)
@@ -361,6 +348,7 @@ function bootstrap(dict)
 		"context",
 		"<entry", --/* ( -- daddr ) push cpu.dict.entry  */
 		[[
+		trace("Pushing cpu.dict.entry " .. tostring(cpu.dict.entry))
 			cpu.DS.push(cpu.dict.entry)
 			return cpu.next
 		]]
@@ -536,20 +524,26 @@ trace("FOUND ; " .. wa)
 	
 	dict.secondary(
 		"context",
-		"?execute", -- /* ( -- ) execute the word if it's immediate (i think)  */
+		"?execute", -- /* ( -- ) execute the word if it's immediate */
+		-- if cpu.state == cpu.mode
+			-- cpu.state = false
+			-- execute
+		   -- else
+			-- cpu.state = false
+			-- end
 		{
-			cfa("<state"),
-			cfa("<mode"),
-			cfa("(value)"),
+			cfa("<state"), -- cpu.DS.push(cpu.state)
+			cfa("<mode"), -- cpu.DS.push(cpu.mode)
+			cfa("(value)"), -- cpu.DS.push(false)
 			false,
-			cfa(">state"),
-			cfa("="),
+			cfa(">state"), -- cpu.state = cpu.DS.pop() # i.e. false
+			cfa("="), -- cpu.DS.push(cpu.DS.pop() == cpu.DS.pop())
 			cfa("(if!rjmp)"),
 			4,
 				cfa("execute"),
 				cfa("(rjmp)"),
 				2,
-			cfa(","),		
+			cfa(","), -- why does it write to the dictionary ?
 		}
 	)
 	
@@ -619,20 +613,30 @@ trace("FOUND ; " .. wa)
 		}
 	)
 	
+	dict.primary( -- push the cfa of colon
+		"context",
+		"(colon)",
+		[[
+			cpu.DS.push(cpu.dict.cfa("context", "colon"))
+			return cpu.next
+		]]
+		
+	)
+	
 	dict.secondary(
 		"context",
 		":", -- /* ( -- ) create a word entry */
 		{
 			cfa("(value)"),
-			"colon",
+			"colon", -- cpu.DS.push("colon")
 			cfa("create"),
-			cfa("<entry"),
-			cfa("cfa"),
-			cfa("there"),
+			cfa("<entry"), -- cpu.DS.push(cpu.dict.entry) -- NFA of word	we just created
+			cfa("cfa"), -- get cfa of "colon"
+			cfa("there"), -- cpu.DS.n = cpu.DS.pop()
 			cfa("ca"),
-			cfa(","),
-			cfa("t"),
-			cfa(">mode")
+			cfa(","), -- cpu.dict.push(cpu.DS.pop())
+			cfa("t"), -- cpu.DS.push(true)
+			cfa(">mode") -- cpu.mode = cpu.DS.pop()
 		}
 	)
 	

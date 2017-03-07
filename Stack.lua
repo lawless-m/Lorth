@@ -34,14 +34,20 @@ Stack = function(nm)
 	stack.pop = 
 		function()
 			local v
+			trace("STK N " .. tostring(stack.n))
 			if stack.n > 1 then
 				stack.n = stack.n - 1
+				trace("STK N-1 " .. tostring(stack.n))
+				trace("stack[stack.n] " .. tostring(stack[stack.n]))
 				v = stack[stack.n]
+				trace("v " .. tostring(v))
 				stack[stack.n] = nil
+				trace("v " .. tostring(v))
 			else
 				v = nil
 			end
 
+			trace("return v " .. tostring(v))
 			return v
 		end
 		
