@@ -11,6 +11,10 @@ for line in io.lines() do
 		os.exit(true, true)
 	elseif line == "DICT" then
 		print(Cpus[cpuN].dict)
+	elseif line == "DD" then
+		fid = io.open("dict.dd.txt", "w+")
+		fid:write(tostring(Cpus[cpuN].dict))
+		fid:close()
 	elseif line == "DS" then
 		print(Cpus[cpuN].DS)
 	elseif line == "RS" then
