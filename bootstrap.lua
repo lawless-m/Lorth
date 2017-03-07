@@ -34,8 +34,6 @@ function bootstrap(dict)
 		"compile", 
 		";",  --  /* ( -- ) finish the definition of a word */
 		[[
-	trace("CPU" .. tostring(cpu))
-	trace("HEY (semi) is " .. cpu.dict.cfa(cpu.vocabulary, "(semi)"))
 			cpu.dict[cpu.dict.n] = cpu.dict.cfa(cpu.vocabulary, "(semi)")
 			cpu.dict.n = cpu.dict.n + 1
 			cpu.mode = false
@@ -236,20 +234,12 @@ function bootstrap(dict)
 		"context",
 		"ca", -- /* ( "word" -- ca|undefined ) push code address or nil on tos */
 		[[
-		trace("ca: " .. tostring(cpu.DS))
-
-			local topx = cpu.DS.pop()
-			
-		trace("vocab: " .. cpu.vocabulary .. " TOPX=" .. tostring(topx) .. " ")
-		
-			
+			local top = cpu.DS.pop()
 			if topx then
-			cpu.DS.push(cpu.dict.ca(cpu.vocabulary, topx))
+				cpu.DS.push(cpu.dict.ca(cpu.vocabulary, topx))
 			else
 				cpu.DS.push(nil)
 			end
-
-				
 			return cpu.next
 		]]
 	)
@@ -258,7 +248,6 @@ function bootstrap(dict)
 		"context",
 		"search", -- /* ( -- (false wa) | true ) search the dictionary for "word" push the wa and a flag for (not found) */
 		[[
-			trace("search: for \"" .. cpu.vocabulary .. " / " .. cpu.token .. "\"")
 			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
 			if wa then
 				cpu.DS.push(wa)
@@ -348,7 +337,6 @@ function bootstrap(dict)
 		"context",
 		"<entry", --/* ( -- daddr ) push cpu.dict.entry  */
 		[[
-		trace("Pushing cpu.dict.entry " .. tostring(cpu.dict.entry))
 			cpu.DS.push(cpu.dict.entry)
 			return cpu.next
 		]]
@@ -359,9 +347,7 @@ function bootstrap(dict)
 		"cfa", -- /* ( NFA -- CFA) push Code Field Address for the given Name Field Address , just arithmetic */
 		[[
 			local nfa = cpu.DS.pop()
-			trace("NFA:" .. nfa)
 			local cfa = nfa_to_cfa(nfa)
-			trace("CFA:" .. cfa)
 			cpu.DS.push(cfa)
 			return cpu.next
 		]]
@@ -442,9 +428,7 @@ function bootstrap(dict)
 		"context",
 		"(rjmp)", -- /* ( -- ) unconditional jump by the delta in the next cell */
 		[[
-			trace("(rjmp) getting relative address from " .. cpu.i)
 			cpu.i = cpu.i + cpu.dict[cpu.i]
-			trace("(rjmp) to " .. cpu.i)
 			return cpu.next
 		]]
 	)
@@ -489,17 +473,12 @@ function bootstrap(dict)
 		"context",
 		"?search",
 		[[
-		
-		trace("SEARCH? for " .. cpu.token)
-		
 			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
 			if wa then
 				cpu.DS.push(wa)
 				cpu.DS.push(false)
 				return cpu.next
 			end
-			
-		trace("CPU MODE " .. tostring(cpu.mode))
 		
 			if cpu.mode == false then
 				cpu.DS.push(true)
@@ -508,7 +487,6 @@ function bootstrap(dict)
 				
 			wa = cpu.dict.cfa("compile", cpu.token)
 			if wa then
-trace("FOUND ; " .. wa)			
 				cpu.DS.push(wa)
 				cpu.DS.push(false)
 				cpu.state = true
