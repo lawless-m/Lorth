@@ -46,7 +46,7 @@ Word = function(dict, nfa, efa)
 				s = s .. word.cfa .. " CFA " .. tostring(dict[word.cfa]) .. " - " .. ivoc .. " / " .. infa .. "\n"	
 				
 				for j = word.pfa, word.efa do
-					if pword == "context / (value)" or pword == "context / (if!rjmp)" or pword == "context / (rjmp)" then
+					if embedded_value(pword) then
 						s = s .. j .. " P " .. tostring(dict[j]) .. "\n"	
 						pword = nil
 					elseif type(dict[j]) == "number" then
