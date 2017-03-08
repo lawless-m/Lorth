@@ -6,14 +6,7 @@ function warn(msg)
 	io.flush()
 end
 
-tracef = io.open("trace.txt", "w+")
---tracef:close()
 
-function trace(msg)
-	--tracef = io.open("trace.txt", "a+")
-	tracef:write("TRACE: " .. msg .. "\n")
-	tracef:flush()
-end
 
 function write_dict(dict, fn)
 	fid = io.open(fn, "w+")
@@ -21,6 +14,7 @@ function write_dict(dict, fn)
 	fid:close()
 end
 
+dofile("trace.lua")
 dofile("tokenize.lua")
 dofile("Stack.lua")
 dofile("Dict.lua")

@@ -67,7 +67,7 @@ function bootstrap(dict)
 		"context",
 		"t", -- /* ( -- true ) */
 		[[
-			cpu.DS.push(true)
+			cpu.push(true)
 			return cpu.next
 		]]
 	)
@@ -77,7 +77,7 @@ function bootstrap(dict)
 		"context",
 		"f", -- /* ( -- false ) */
 		[[
-			cpu.DS.push(false)
+			cpu.push(false)
 			return cpu.next
 		]]
 	)
@@ -86,7 +86,7 @@ function bootstrap(dict)
 		"context",
 		"=", -- /* ( b a - (b == a) ) equality */
 		[[
-			cpu.DS.push(cpu.DS.pop() == cpu.DS.pop())
+			cpu.push(cpu.pop() == cpu.pop())
 			return cpu.next
 		]]
 	
@@ -96,7 +96,7 @@ function bootstrap(dict)
 		"context",
 		"here", -- /* ( - DP )  push dictionary pointer */
 		[[
-			cpu.DS.push(cpu.dict.n)
+			cpu.push(cpu.dict.n)
 			return cpu.next
 		]]
 	)
@@ -105,7 +105,7 @@ function bootstrap(dict)
 		"context",
 		"there", -- /* (NEWDP - ) pop to the dictionary pointer */
 		[[
-			cpu.dict.n = cpu.DS.pop()
+			cpu.dict.n = cpu.pop()
 			return cpu.next
 		]]
 	)
@@ -114,7 +114,7 @@ function bootstrap(dict)
 		"context",
 		"dup", -- /* ( a -- a a ) duplicate the tos */
 		[[
-			cpu.DS.push(cpu.DS.top())
+			cpu.push(cpu.DS.top())
 			return cpu.next
 		]]
 	)
@@ -123,11 +123,11 @@ function bootstrap(dict)
 		"context",
 		"tuck", -- /* ( b a -- a b a ) copy tos to 3rd place, could just be : tuck swap over ; */
 		[[
-			local a = cpu.DS.pop()
-			local b = cpu.DS.pop()
-			cpu.DS.push(a)
-			cpu.DS.push(b)
-			cpu.DS.push(a)
+			local a = cpu.pop()
+			local b = cpu.pop()
+			cpu.push(a)
+			cpu.push(b)
+			cpu.push(a)
 			return cpu.next
 		]]
 	)
@@ -136,7 +136,7 @@ function bootstrap(dict)
 		"context",
 		"context", -- /* ( -- "context" ) push "context" */
 		[[
-			cpu.DS.push("context")
+			cpu.push("context")
 			return cpu.next
 		]]
 	)
@@ -145,7 +145,7 @@ function bootstrap(dict)
 		"context",
 		"compile", -- /* ( -- "compile" ) push "compile" */
 		[[
-			cpu.DS.push("compile")
+			cpu.push("compile")
 			return cpu.next
 		]]
 	)
@@ -155,7 +155,7 @@ function bootstrap(dict)
 		"execute", -- /* ( -- wa ) run the word with its address on the tos */
 		[[
 
-			cpu.cfa = cpu.DS.pop()
+			cpu.cfa = cpu.pop()
 
 			return cpu.run
 		]]
@@ -163,11 +163,13 @@ function bootstrap(dict)
 	
 	dict.primary(
 		"context",
-		"token", -- /* ( token -- ) extract everything in cpu.pad until the terminator, and put it in the dictionary */
+		"token", -- /* ( token -- ) split cpu.pad with the pattern in ToS
 		[[
 
-			cpu.token, cpu.pad = tokenize(cpu.DS.pop(), cpu.pad)
-
+			local tos = cpu.pop()
+		trace("TOS " .. tostring(tos) .. " pad " .. cpu.pad)
+			cpu.token, cpu.pad = tokenize(tos, cpu.pad)
+		trace("token " .. cpu.token .. " pad " .. cpu.pad)
 			return cpu.next
 		]]
 	)
@@ -176,13 +178,13 @@ function bootstrap(dict)
 		"context",
 		"token?", -- /* ( token -- ( true | false ) ) extract everything in cpu.pad until the terminator, put it in the dictionary and report if you found anything */
 		[[
-			local term = cpu.DS.pop()
+			local pattern = cpu.pop()
 			if cpu.pad == "" then
-				cpu.DS.push(false)
+				cpu.push(false)
 				return cpu.next
 			end
-			cpu.token, cpu.pad = tokenize(term, cpu.pad)
-			cpu.DS.push(true)
+			cpu.token, cpu.pad = tokenize(pattern, cpu.pad)
+			cpu.push(true)
 			return cpu.next
 		]]
 	)
@@ -191,7 +193,7 @@ function bootstrap(dict)
 		"context",
 		"<token", -- push the token to the DS
 		[[
-			cpu.DS.push(cpu.token)
+			cpu.push(cpu.token)
 			return cpu.next
 		]]
 	)
@@ -200,7 +202,7 @@ function bootstrap(dict)
 		"context",
 		"(value)", --  /* ( -- n ) push the contents of the next cell */
 		[[
-			cpu.DS.push(cpu.dict[cpu.i])
+			cpu.push(cpu.dict[cpu.i])
 			cpu.i = cpu.i + 1
 			return cpu.next
 		]]
@@ -211,7 +213,7 @@ function bootstrap(dict)
 		",", -- /* ( val -- ) store tos in the next cell */
 		[[
 
-			cpu.dict.push(cpu.DS.pop())
+			cpu.dict.push(cpu.pop())
 
 			return cpu.next
 		]]
@@ -221,9 +223,7 @@ function bootstrap(dict)
 		"context",
 		"drop", -- /* ( a -- ) drop the tos */
 		[[
-
-			cpu.DS.pop()
-
+			cpu.pop()
 			return cpu.next
 		]]
 	)
@@ -232,11 +232,11 @@ function bootstrap(dict)
 		"context",
 		"ca", -- /* ( "word" -- ca|undefined ) push code address or nil on tos */
 		[[
-			local top = cpu.DS.pop()
+			local top = cpu.pop()
 			if top then
-				cpu.DS.push(cpu.dict.ca(cpu.vocabulary, top))
+				cpu.push(cpu.dict.ca(cpu.vocabulary, top))
 			else
-				cpu.DS.push(nil)
+				cpu.push(nil)
 			end
 			return cpu.next
 		]]
@@ -248,10 +248,10 @@ function bootstrap(dict)
 		[[
 			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
 			if wa then
-				cpu.DS.push(wa)
-				cpu.DS.push(false)
+				cpu.push(wa)
+				cpu.push(false)
 			else
-				cpu.DS.push(true)
+				cpu.push(true)
 			end
 			return cpu.next
 		]]
@@ -261,7 +261,7 @@ function bootstrap(dict)
 		"context",
 		"<mode", -- /* ( -- mode ) push the current mode */
 		[[
-			cpu.DS.push(cpu.mode)
+			cpu.push(cpu.mode)
 			return cpu.next
 		]]
 	)
@@ -270,9 +270,7 @@ function bootstrap(dict)
 		"context",
 		">mode", --  /* ( mode -- ) set the current mode */
 		[[
-
-			cpu.mode = (cpu.DS.pop() == true)
-
+			cpu.mode = (cpu.pop() == true)
 			return cpu.next
 		]]
 	)
@@ -281,7 +279,7 @@ function bootstrap(dict)
 		"context",
 		"<state", -- /* ( -- state ) push the current state */
 		[[
-			cpu.DS.push(cpu.state)
+			cpu.push(cpu.state)
 			return cpu.next
 		]]
 	)
@@ -290,9 +288,7 @@ function bootstrap(dict)
 		"context",
 		">state", -- /* ( state -- ) set the current state */
 		[[
-
-			cpu.state = (cpu.DS.pop() == true)
-
+			cpu.state = (cpu.pop() == true)
 			return cpu.next
 		]]
 	)
@@ -301,9 +297,7 @@ function bootstrap(dict)
 		"context",
 		">vocabulary", -- /* ( vocabulary -- ) set the current vocabulary */
 		[[
-
-			cpu.vocabulary = cpu.DS.pop()
-
+			cpu.vocabulary = cpu.pop()
 			return cpu.next		
 		]]
 	)
@@ -312,10 +306,10 @@ function bootstrap(dict)
 		"context",
 		"not", -- /* ( v -- !v ) clean boolean not */
 		[[
-			if cpu.DS.pop() then
-				cpu.DS.push(false)
+			if cpu.pop() then
+				cpu.push(false)
 			else
-				cpu.DS.push(true)
+				cpu.push(true)
 			end
 		]]
 	)
@@ -324,9 +318,7 @@ function bootstrap(dict)
 		"context",
 		">entry", -- /* ( -- ) write to cpu.dict.entry */
 		[[
-
-			cpu.dict.entry = cpu.DS.pop()
-
+			cpu.dict.entry = cpu.pop()
 			return cpu.next
 		]]
 	)
@@ -335,7 +327,7 @@ function bootstrap(dict)
 		"context",
 		"<entry", --/* ( -- daddr ) push cpu.dict.entry  */
 		[[
-			cpu.DS.push(cpu.dict.entry)
+			cpu.push(cpu.dict.entry)
 			return cpu.next
 		]]
 	)
@@ -344,7 +336,7 @@ function bootstrap(dict)
 		"context",
 		"cfa", -- /* ( NFA -- CFA) push Code Field Address for the given Name Field Address , just arithmetic */
 		[[
-			cpu.DS.push(nfa_to_cfa(cpu.DS.pop()))
+			cpu.push(nfa_to_cfa(cpu.pop()))
 			return cpu.next
 		]]
 	)
@@ -363,9 +355,8 @@ function bootstrap(dict)
 		"?number", -- /* ( -- flag (maybe value) ) depending on the mode, push a flag and the value or store it in the dictionary */
 		[[
 			local n = tonumber(cpu.token)
-			
 			if n == nil then
-				cpu.DS.push(true)
+				cpu.push(true)
 				return cpu.next
 			end
 			
@@ -373,9 +364,9 @@ function bootstrap(dict)
 				cpu.dict.push(cpu.dict.cfa(cpu.vocabulary, "(value)"))
 				cpu.dict.push(n)
 			else
-				cpu.DS.push(n)
+				cpu.push(n)
 			end
-			cpu.DS.push(false)
+			cpu.push(false)
 			return cpu.next
 		]]
 	)
@@ -393,7 +384,7 @@ function bootstrap(dict)
 		"context",
 		"spc", --  /* ( -- " " ) push a space character */
 		[[
-			cpu.DS.push(" ")
+			cpu.push(" ")
 			return cpu.next
 		]]
 	)
@@ -403,9 +394,9 @@ function bootstrap(dict)
 		"chr",
 		[[
 			cpu.push(string.char(cpu.pop()))
+			return cpu.next
 		]]
-		
-		)
+	)
 	
 	dict.primary(
 		"context",
@@ -420,7 +411,7 @@ function bootstrap(dict)
 		"context",
 		"(if!rjmp)", --  /* ( flag -- ) if flag is false, jump by the delta in next cell, or just skip over */
 		[[
-			if cpu.DS.pop() then
+			if cpu.pop() then
 				cpu.i = cpu.i + 1
 			else
 				cpu.i = cpu.i + cpu.dict[cpu.i]
@@ -442,7 +433,7 @@ function bootstrap(dict)
 		"context",
 		"<cfa*", -- /* push the currrent value of cpu.cfa and exit (points to PFA in create) 		*/
 		[[
-			cpu.DS.push(cpu.cfa)
+			cpu.push(cpu.cfa)
 			return cpu.semi
 		]]
 	)
@@ -451,10 +442,10 @@ function bootstrap(dict)
 		"context",
 		"wa", -- /* ( "word" -- wa|undefined ) push word address or undefined on tos */
 		[[
-			cpu.DS.push(cpu.dict.cfa(cpu.vocabulary, cpu.DS.pop()));
+			cpu.push(cpu.dict.cfa(cpu.vocabulary, cpu.pop()));
 			return cpu.next;
 		]]
-		)
+	)
 	
 	dict.secondary(
 		"context",
@@ -489,25 +480,25 @@ function bootstrap(dict)
 		[[
 			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
 			if wa then
-				cpu.DS.push(wa)
-				cpu.DS.push(false)
+				cpu.push(wa)
+				cpu.push(false)
 				return cpu.next
 			end
 		
 			if cpu.mode == false then
-				cpu.DS.push(true)
+				cpu.push(true)
 				return cpu.next
 			end
 				
 			wa = cpu.dict.cfa("compile", cpu.token)
 			if wa then
-				cpu.DS.push(wa)
-				cpu.DS.push(false)
+				cpu.push(wa)
+				cpu.push(false)
 				cpu.state = true
 				return cpu.next
 			end
 			
-			cpu.DS.push(true)
+			cpu.push(true)
 			return cpu.next			
 		]]
 	)
@@ -522,12 +513,12 @@ function bootstrap(dict)
 			-- cpu.state = false
 			-- end
 		{
-			cfa("<state"), -- cpu.DS.push(cpu.state)
-			cfa("<mode"), -- cpu.DS.push(cpu.mode)
-			cfa("(value)"), -- cpu.DS.push(false)
+			cfa("<state"), -- cpu.push(cpu.state)
+			cfa("<mode"), -- cpu.push(cpu.mode)
+			cfa("(value)"), -- cpu.push(false)
 			false,
-			cfa(">state"), -- cpu.state = cpu.DS.pop() # i.e. false
-			cfa("="), -- cpu.DS.push(cpu.DS.pop() == cpu.DS.pop())
+			cfa(">state"), -- cpu.state = cpu.pop() # i.e. false
+			cfa("="), -- cpu.push(cpu.pop() == cpu.pop())
 			cfa("(if!rjmp)"),
 			4,
 				cfa("execute"),
@@ -551,17 +542,17 @@ function bootstrap(dict)
 		"context",
 		"create", -- /* ( -- ) create a dictionary entry for the next word in the pad */
 		{
-			cfa("<entry"), -- cpu.DS.push(cpu.dict.entry)
-			cfa("here"), -- cpu.DS.push(cpu.dict.n)
-			cfa(">entry"), -- cpu.dict.entry = cpu.DS.pop()
-			cfa("<word"), -- cpu.DS.push(" ");cpu.token, cpu.pad = tokenize(cpu.DS.pop(), cpu.pad); cpu.DS.push(cpu.token);
-			cfa(","), -- cpu.dict.push(cpu.DS.pop())
+			cfa("<entry"), -- cpu.push(cpu.dict.entry)
+			cfa("here"), -- cpu.push(cpu.dict.n)
+			cfa(">entry"), -- cpu.dict.entry = cpu.pop()
+			cfa("<word"), -- cpu.push(" ");cpu.token, cpu.pad = tokenize(cpu.pop(), cpu.pad); cpu.push(cpu.token);
+			cfa(","), -- cpu.dict.push(cpu.pop())
 			cfa(",vocab"), -- cpu.dict.push(cpu.vocabulary)
-			cfa(","), -- cpu.dict.push(cpu.DS.pop())
-			cfa("(value)"), -- cpu.DS.push(cpu.dict[cpu.i]); cpu.i = cpu.i + 1
+			cfa(","), -- cpu.dict.push(cpu.pop())
+			cfa("(value)"), -- cpu.push(cpu.dict[cpu.i]); cpu.i = cpu.i + 1
 			"<cfa*", -- cpu.dict[cpu.i] from above
-			cfa("ca"), -- local top = cpu.DS.pop() ;if top then 	cpu.DS.push(cpu.dict.ca(cpu.vocabulary, top)) else 		cpu.DS.push(nil) end
-			cfa(","), -- cpu.dict.push(cpu.DS.pop())
+			cfa("ca"), -- local top = cpu.pop() ;if top then 	cpu.push(cpu.dict.ca(cpu.vocabulary, top)) else 		cpu.push(nil) end
+			cfa(","), -- cpu.dict.push(cpu.pop())
 		}
 	)
 	
@@ -607,7 +598,7 @@ function bootstrap(dict)
 		"context",
 		"(colon)",
 		[[
-			cpu.DS.push(cpu.dict.cfa("context", "colon"))
+			cpu.push(cpu.dict.cfa("context", "colon"))
 			return cpu.next
 		]]
 		
@@ -618,15 +609,15 @@ function bootstrap(dict)
 		":", -- /* ( -- ) create a word entry */
 		{
 			cfa("(value)"),
-			"colon", -- cpu.DS.push("colon")
+			"colon", -- cpu.push("colon")
 			cfa("create"),
-			cfa("<entry"), -- cpu.DS.push(cpu.dict.entry) -- NFA of word	we just created
+			cfa("<entry"), -- cpu.push(cpu.dict.entry) -- NFA of word	we just created
 			cfa("cfa"), -- get cfa of "colon"
-			cfa("there"), -- cpu.DS.n = cpu.DS.pop()
+			cfa("there"), -- cpu.DS.n = cpu.pop()
 			cfa("ca"),
-			cfa(","), -- cpu.dict.push(cpu.DS.pop())
-			cfa("t"), -- cpu.DS.push(true)
-			cfa(">mode") -- cpu.mode = cpu.DS.pop()
+			cfa(","), -- cpu.dict.push(cpu.pop())
+			cfa("t"), -- cpu.push(true)
+			cfa(">mode") -- cpu.mode = cpu.pop()
 		}
 	)
 	
@@ -673,15 +664,21 @@ end
 
 
 function base(cpu)
+
+	-- take the next token, look up its word address and insert it into the dictionary as a (value)
+	cpu.input(": postpone <word wa `value , , ; immediate")
+
 	cpu.input(": quote 34 chr ;")
 
 	-- push the buffer up to "
 	cpu.input(": \" quote token <token ;")
 
-	-- take the next token, look up its word address and insert it into the dictionary as a (value)
-	cpu.input(": postpone <word wa `value , , ; immediate")
+	-- store the buffer up to "
+	cpu.input(": .\" \" postpone (value) , , ; immediate")
 
-
+	return
+	
+[[
 	-- store the jmp, push the address of the jmp target, move the dp past it
 	cpu.input(": if postpone (if!jmp) , here dp++ ; immediate")
 
@@ -690,9 +687,6 @@ function base(cpu)
 
 	-- ( whereToStoreTarget -- newWhereToStoreTarget)
 	cpu.input(": else postpone (jmp) , here tuck +1 ! dp++  ; immediate")
-
-	-- store the buffer up to "
-	cpu.input(": .\" \" postpone (value) , , ; immediate")
 
 	cpu.input(": ;code  .\" $$\" token <token (js) drop postpone (;code) , , ; immediate")
 
@@ -731,5 +725,6 @@ function base(cpu)
 	cpu.input(": last @ dup length -1 . ;")
 
 	cpu.input(": :: context >vocabulary create t >mode ;")
+	]]
 end
 

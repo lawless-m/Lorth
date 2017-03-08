@@ -8,7 +8,7 @@ Cpu = function()
 		DS = Stack("DS"),
 		RS = Stack("RS"),
 		JS = Stack("JS"),
-		dict = Dict("CPUDICT"),
+		dict = Dict("DICT"),
 		mode = false,
 		state = false,
 		vocabulary = "context",
@@ -63,7 +63,7 @@ Cpu = function()
 			fns[cpu.semi] = "semi"
 			tracefn = function()
 				if fns[f] ~= nil then
-					trace("CPU." .. fns[f])
+					-- trace("CPU." .. fns[f])
 				else
 					w = Word(cpu.dict, fn_to_nfa(cpu.dict, f))
 					--trace("CPU " .. tostring(cpu))

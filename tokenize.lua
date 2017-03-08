@@ -37,7 +37,7 @@ function tokenize(pattern, rawtext)
 	end
 	
 	-- if terminator is a quote do a special routine to crack out \" into a quote
-	if pattern == "\"" then return tokenize_string(rawtext) end
+	--if pattern == "\"" then return tokenize_string(rawtext) end
 	if pattern == "" or terminator == "" then return "", "" end
 	
 	-- ANYTHING ELSE DOESN'T WORK

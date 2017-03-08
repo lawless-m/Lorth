@@ -79,7 +79,7 @@ function fn_to_nfa(dict, fn)
 		nfa = dict[nfa_to_lfa(nfa)]
 		if nfa == nil then nfa = 0 end
 	end
-	trace("fn not found")
+	trace("fn not found : " .. tostring(fn))
 end
 	
 function embedded_value(label)
