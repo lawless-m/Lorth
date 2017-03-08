@@ -52,10 +52,10 @@ function bootstrap(dict)
 		]]
 	)
 
-	
+
 	dict.primary(
 		"context",
-		"//", --  /* ( -- ) store the pad in the dictionary */
+		"//", --  /* ( -- ) store the pad in the dictionary  - for NOP'ing comments*/
 		[[
 			cpu.dict.push("// " .. cpu.pad)
 			cpu.pad = ""
@@ -123,10 +123,8 @@ function bootstrap(dict)
 		"context",
 		"tuck", -- /* ( b a -- a b a ) copy tos to 3rd place, could just be : tuck swap over ; */
 		[[
-
 			local a = cpu.DS.pop()
 			local b = cpu.DS.pop()
-
 			cpu.DS.push(a)
 			cpu.DS.push(b)
 			cpu.DS.push(a)
@@ -346,9 +344,7 @@ function bootstrap(dict)
 		"context",
 		"cfa", -- /* ( NFA -- CFA) push Code Field Address for the given Name Field Address , just arithmetic */
 		[[
-			local nfa = cpu.DS.pop()
-			local cfa = nfa_to_cfa(nfa)
-			cpu.DS.push(cfa)
+			cpu.DS.push(nfa_to_cfa(cpu.DS.pop()))
 			return cpu.next
 		]]
 	)
@@ -404,6 +400,15 @@ function bootstrap(dict)
 	
 	dict.primary(
 		"context",
+		"chr",
+		[[
+			cpu.push(string.char(cpu.pop()))
+		]]
+		
+		)
+	
+	dict.primary(
+		"context",
 		",vocab", -- /* ( -- ) store the current vocabulary in the dictionary */
 		[[
 			cpu.dict.push(cpu.vocabulary)
@@ -441,6 +446,15 @@ function bootstrap(dict)
 			return cpu.semi
 		]]
 	)
+	
+	dict.primary(
+		"context",
+		"wa", -- /* ( "word" -- wa|undefined ) push word address or undefined on tos */
+		[[
+			cpu.DS.push(cpu.dict.cfa(cpu.vocabulary, cpu.DS.pop()));
+			return cpu.next;
+		]]
+		)
 	
 	dict.secondary(
 		"context",
@@ -494,9 +508,7 @@ function bootstrap(dict)
 			end
 			
 			cpu.DS.push(true)
-			return cpu.next
-			
-			
+			return cpu.next			
 		]]
 	)
 	
@@ -618,6 +630,15 @@ function bootstrap(dict)
 		}
 	)
 	
+	dict.primary( -- could be secondary
+		"context",
+		"immediate", -- /* ( -- ) set the vocabulary of the last defined word to "compile" */
+		[[
+			cpu.dict[cpu.dict.entry + 1] = "compile";
+			return cpu.next;
+		]]	
+	)
+	
 	dict.secondary(
 		"context",
 		"does>", -- /* ( -- ) fill dictionary with runtime info */
@@ -635,5 +656,80 @@ function bootstrap(dict)
 		}
 	)
 	
+	dict.primary(
+		"context",
+		"!", --  /* ( adr val -- ) write val to cell at adr */
+		[[
+			local v, a = cpu.pop(), cpu.pop()
+			cpu.dict[a] = v;
+			return cpu.next;
+		]]
+	)
+	
+	
+	
 	-- now we should be able to just parse raw text
 end
+
+
+function base(cpu)
+	cpu.input(": quote 34 chr ;")
+
+	-- push the buffer up to "
+	cpu.input(": \" quote token <token ;")
+
+	-- take the next token, look up its word address and insert it into the dictionary as a (value)
+	cpu.input(": postpone <word wa `value , , ; immediate")
+
+
+	-- store the jmp, push the address of the jmp target, move the dp past it
+	cpu.input(": if postpone (if!jmp) , here dp++ ; immediate")
+
+	-- ( whereToStoreTarget -- )  this is the ultimate jump target, store it
+	cpu.input(": then here ! ; immediate")
+
+	-- ( whereToStoreTarget -- newWhereToStoreTarget)
+	cpu.input(": else postpone (jmp) , here tuck +1 ! dp++  ; immediate")
+
+	-- store the buffer up to "
+	cpu.input(": .\" \" postpone (value) , , ; immediate")
+
+	cpu.input(": ;code  .\" $$\" token <token (js) drop postpone (;code) , , ; immediate")
+
+	cpu.input(": ;js .\" $$\" token <token  .\" ; return cpu.next;\" + (js) if here swap , dup -1 swap ! f >mode then ; immediate")
+
+	cpu.input(": begin here ; immediate")
+	cpu.input(": until postpone (if!jmp) , , ; immediate")
+
+	cpu.input(": while postpone (if!jmp) , here dp++ ; immediate")
+	cpu.input(": repeat swap postpone (jmp) , , here !  ; immediate")
+
+	cpu.input(": do  postpone (do) , here 0 >J ; immediate")
+	cpu.input(": loop  postpone (loop) , , <J dup 0 > if begin <J here ! -1 dup 0 = until then drop ; immediate")
+	cpu.input(": +loop postpone (+loop) , , ; immediate")
+
+	cpu.input(": (leave) <J drop <J drop ;")
+	cpu.input(": leave postpone (leave)  , postpone (jmp) , <J +1 here  >J >J dp++ ; immediate")
+
+	-- needs does> @ ;
+	cpu.input(": constant create , ;")
+	cpu.input(": variable create 0 ,  ;")
+
+
+	cpu.input(": . ;js  var k = cpu.d.pop(); cpu.d.push(cpu.d.pop()[k]) $$")
+	cpu.input(": last ;js var k = cpu.d.pop(); cpu.d.push(cpu.d.pop().lastIndexOf(k)) $$")
+	cpu.input(": slice ;js var t = cpu.d.pop(); var e = cpu.d.pop(); var s = cpu.d.pop(); cpu.d.push(t.slice(s, e)); $$")
+	cpu.input(": {} ;js cpu.d.push({}) $$")
+	cpu.input(": [] ;js cpu.d.push([]) $$")
+	cpu.input(": <= ;js cpu.d.pop()[cpu.d.pop()] = cpu.d.pop(); $$")
+	--  ( value key object -- )
+	cpu.input(": << ;js var v = cpu.d.pop(); cpu.d.pop().push(v); $$")
+	cpu.input(": >> ;js cpu.d.push(cpu.d.pop().pop());  $$")
+	cpu.input(": length ;js cpu.d.push(cpu.d.pop().length); $$")
+	cpu.input(": >0 ;js cpu.d.push(cpu.d.pop() > 0) $$")
+
+	cpu.input(": last @ dup length -1 . ;")
+
+	cpu.input(": :: context >vocabulary create t >mode ;")
+end
+

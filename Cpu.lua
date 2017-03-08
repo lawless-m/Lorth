@@ -14,6 +14,9 @@ Cpu = function()
 		vocabulary = "context",
 	}
 	
+	cpu.pop = cpu.DS.pop
+	cpu.push = cpu.DS.push
+	
 	cpu.run = 
 		function()
 			local cp = cpu.dict[cpu.cfa] -- cell containing function to run
@@ -89,6 +92,21 @@ Cpu = function()
 			--end
 		end
 			
+	cpu.input_file =
+		function(fn)
+			fid = io.open(fn, "r")
+			cpu.input(fid:read("a"))
+			fid:close()
+		end
+		
+	cpu.input_file_byline = 
+		function(fn)
+			fid = io.open(fn, "r")
+			for line in fid:lines() do
+				trace("L: " .. line)
+				cpu.input(line)
+			end
+		end
 	cpu.input =
 		function(input)
 		    cpu.dict[-100] = cpu.dict.cfa("context", "outer")

@@ -30,6 +30,8 @@ end
 function tokenize(pattern, rawtext) 
 	-- split at the terminator, return text before the terminator and text after the terminator stops repeating (e.g. ("-", "ab--cd-") returns {"ab", "cd-"}
 	
+	trace("TOK: p=\"" .. pattern .. "\", r=\"" .. rawtext .. "\"" )
+	
 	if pattern == " " and rawtext ~= "" then 
 		return tokenize_bySpc(rawtext)
 	end
