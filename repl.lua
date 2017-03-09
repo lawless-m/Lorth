@@ -21,6 +21,8 @@ for line in io.lines() do
 		print(Cpus[cpuN].RS)
 	elseif line == "JS" then
 		print(Cpus[cpuN].JS)
+	elseif line == "CPU" then
+		print(Cpus[cpuN])
 	else
 		Cpus[cpuN].input(line)
 

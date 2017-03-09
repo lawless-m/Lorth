@@ -46,7 +46,7 @@ pfa_to_voa = function(n)  return n - header_size end
 pfa_to_nfa = function(n)  return n - (header_size + 1) end
 
 -- not just arithmetic, this walks the dict
-function nfa_to_efa(dict, nfa)
+function nfa_to_efa(dict, nfa) -- efa being the last address of this word
 	if type(nfa) ~= "number" then
 		warn("NFA not a number")
 		return
@@ -70,16 +70,23 @@ function fn_to_nfa(dict, fn)
 	end
 		
 	local nfa = dict.entry
-	local cfa
+	local cfa, lfa
+	--trace("FN:: " .. tostring(fn))
 	while nfa > 0 do
+		--trace("NFA:: " .. tostring(nfa))
 		cfa = nfa_to_cfa(nfa)
+		--trace("CFA:: " .. tostring(cfa))
+		--trace("LOOK:: " .. tostring(dict[dict[cfa]]))
 		if fn == dict[dict[cfa]] then
 			return nfa
 		end
-		nfa = dict[nfa_to_lfa(nfa)]
+		lfa = nfa_to_lfa(nfa)
+		--trace("LFA:: " .. tostring(lfa))
+		nfa = dict[lfa]
+		
 		if nfa == nil then nfa = 0 end
 	end
-	trace("fn not found : " .. tostring(fn))
+	trace("fn not found :" .. tostring(fn))
 end
 	
 function embedded_value(label)
@@ -92,13 +99,12 @@ end
 --- DEBUGGIUNG
 
 	
-function locate_fn(cpu, addr)
+function locate_fn(dict, addr)
 	if addr == nil then
 		return nil, nil
 	end
-	local dict = cpu.dict
 	local nfa = dict.entry
-	while nfa > 0 do
+	while nfa ~= nil and nfa > 0 do
 		if dict[nfa+4] == addr then
 			return dict[nfa], dict[nfa+1]
 		end
@@ -127,7 +133,8 @@ Dict = function()
 		function(vocab, word, fntxt)
 			local nfa, cfa, pfa = dict.header(vocab, word)
 			dict[cfa] = pfa -- cell with the function pointer to execute
-			fn = load("trace(\"" .. vocab .. "/" .. word .. "\");" .. "cpu=...;" .. fntxt)
+			-- fn = load("trace(\"" .. vocab .. "/" .. word .. "\");" .. "cpu=...;" .. fntxt)
+			fn = load("cpu=...;" .. fntxt)
 			if fn == nil then
 				warn(fntxt)
 				warn("Compile failed")

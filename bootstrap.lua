@@ -167,9 +167,7 @@ function bootstrap(dict)
 		[[
 
 			local tos = cpu.pop()
-		trace("TOS " .. tostring(tos) .. " pad " .. cpu.pad)
 			cpu.token, cpu.pad = tokenize(tos, cpu.pad)
-		trace("token " .. cpu.token .. " pad " .. cpu.pad)
 			return cpu.next
 		]]
 	)
@@ -236,6 +234,7 @@ function bootstrap(dict)
 			if top then
 				cpu.push(cpu.dict.ca(cpu.vocabulary, top))
 			else
+				warn("NOT FOUND: " .. tostring(cpu.vocabulary) .. " / " .. tostring(top))
 				cpu.push(nil)
 			end
 			return cpu.next
@@ -655,15 +654,54 @@ function bootstrap(dict)
 			cpu.dict[a] = v;
 			return cpu.next;
 		]]
+	)	
+	
+	
+	dict.primary(
+		"context",
+		"(if!jmp)",
+		[[
+			if cpu.pop() == true then
+				cpu.i = cpu.i + 1
+			else
+				cpu.i = cpu.dict[cpu.i]
+			end
+			return cpu.next
+		]]
 	)
 	
 	
-	
+	dict.primary(
+		"context",
+		"(jmp)",
+		[[
+			cpu.i = cpu.dict[cpu.i]
+			return cpu.next
+		]]
+	)
+		
+	dict.primary(
+		"context",
+		"+1",
+		[[
+			cpu.push(cpu.pop()+1)
+			return cpu.next
+		]]
+	)
 	-- now we should be able to just parse raw text
 end
 
 
 function base(cpu)
+
+	cpu.dict.primary(
+		"context",
+		"emit",
+		[[
+			print(cpu.pop())
+			return cpu.next
+		]]
+	)
 
 	-- take the next token, look up its word address and insert it into the dictionary as a (value)
 	cpu.input(": postpone <word wa `value , , ; immediate")
@@ -676,9 +714,8 @@ function base(cpu)
 	-- store the buffer up to "
 	cpu.input(": .\" \" postpone (value) , , ; immediate")
 
-	return
 	
-[[
+	
 	-- store the jmp, push the address of the jmp target, move the dp past it
 	cpu.input(": if postpone (if!jmp) , here dp++ ; immediate")
 
@@ -688,6 +725,8 @@ function base(cpu)
 	-- ( whereToStoreTarget -- newWhereToStoreTarget)
 	cpu.input(": else postpone (jmp) , here tuck +1 ! dp++  ; immediate")
 
+	return 
+	[[
 	cpu.input(": ;code  .\" $$\" token <token (js) drop postpone (;code) , , ; immediate")
 
 	cpu.input(": ;js .\" $$\" token <token  .\" ; return cpu.next;\" + (js) if here swap , dup -1 swap ! f >mode then ; immediate")
