@@ -374,7 +374,7 @@ function bootstrap(dict)
 		"context",
 		"tokenerror", --  { /* ( -- ) report an unrecognised word error */
 		[[
-			warn(">>" .. cpu.token .. "<< error, unrecognised word (inside the >><<)")
+			warn("\"" .. tostring(cpu.token) .. "\" error, unrecognised word")
 			return cpu.next
 		]]
 	)
@@ -688,6 +688,100 @@ function bootstrap(dict)
 			return cpu.next
 		]]
 	)
+	
+	dict.primary(
+		"context",
+		"swap", -- swaps top two data stack entries
+		[[
+			local a = cpu.pop()
+			local b = cpu.pop()
+			cpu.push(a)
+			cpu.push(b)
+			return cpu.next
+		]]
+		
+	)
+	
+	dict.primary(
+		"context",
+		">J", -- pop DS to JS
+		[[
+			cpu.JS.push(cpu.pop())
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"<J", -- pop JS to DS
+		[[
+			cpu.pop(cpu.JS.pop())
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		">",
+		[[
+			local a = cpu.pop()
+			local b = cpu.pop()
+			cpu.push(b > a)
+			return cpu.next
+		]]
+	)
+	
+	dict.primary(
+		"context",
+		"(loop)", -- very similar to (+loop) why not "1 (+loop)"
+		[[
+			local tos = cpu.JS.n-1
+			local term = cpu.JS[tos-1]
+			local count = cpu.JS[tos] + 1
+			if count < term then
+				cpu.i = cpu[cpu.i]
+				cpu.JS[tos] = count
+			else
+				cpu.JS.pop()
+				cpu.JS.pop()
+				cpu.i = cpu.i + 1
+			end
+			return cpu.next		
+		]]
+	)
+		
+	dict.primary(
+		"context",
+		"(+loop)",
+		[[
+			local tos = cpu.JS.n-1
+			local term = cpu.JS[tos-1]
+			local count = cpu.JS[tos] + cpu.pop()
+			if count < term then
+				cpu.i = cpu[cpu.i]
+				cpu.JS[tos] = count
+			else
+				cpu.JS.pop()
+				cpu.JS.pop()
+				cpu.i = cpu.i + 1
+			end
+			return cpu.next		
+		]]
+	)
+	
+	
+	dict.primary( 
+		"context",
+		"(do)", -- could be just "swap <J <J"
+		[[
+			local index = cpu.pop()
+			local term = cpu.pop()
+			cpu.JS.push(term)
+			cpu.JS.push(index)			
+			return cpu.next		
+		]]
+	)
+	
 	-- now we should be able to just parse raw text
 end
 
@@ -725,11 +819,6 @@ function base(cpu)
 	-- ( whereToStoreTarget -- newWhereToStoreTarget)
 	cpu.input(": else postpone (jmp) , here tuck +1 ! dp++  ; immediate")
 
-	return 
-	[[
-	cpu.input(": ;code  .\" $$\" token <token (js) drop postpone (;code) , , ; immediate")
-
-	cpu.input(": ;js .\" $$\" token <token  .\" ; return cpu.next;\" + (js) if here swap , dup -1 swap ! f >mode then ; immediate")
 
 	cpu.input(": begin here ; immediate")
 	cpu.input(": until postpone (if!jmp) , , ; immediate")
@@ -737,18 +826,22 @@ function base(cpu)
 	cpu.input(": while postpone (if!jmp) , here dp++ ; immediate")
 	cpu.input(": repeat swap postpone (jmp) , , here !  ; immediate")
 
-	cpu.input(": do  postpone (do) , here 0 >J ; immediate")
-	cpu.input(": loop  postpone (loop) , , <J dup 0 > if begin <J here ! -1 dup 0 = until then drop ; immediate")
+	
+	cpu.input(": do postpone (do) , here 0 >J ; immediate")
+	cpu.input(": loop postpone (loop) , , <J dup 0 > if begin <J here ! -1 dup 0 = until then drop ; immediate")
 	cpu.input(": +loop postpone (+loop) , , ; immediate")
 
 	cpu.input(": (leave) <J drop <J drop ;")
-	cpu.input(": leave postpone (leave)  , postpone (jmp) , <J +1 here  >J >J dp++ ; immediate")
+	cpu.input(": leave postpone (leave) , postpone (jmp) , <J +1 here  >J >J dp++ ; immediate")
 
 	-- needs does> @ ;
 	cpu.input(": constant create , ;")
 	cpu.input(": variable create 0 ,  ;")
 
+	return [[
+	cpu.input(": ;code  .\" $$\" token <token (js) drop postpone (;code) , , ; immediate")
 
+	cpu.input(": ;js .\" $$\" token <token  .\" ; return cpu.next;\" + (js) if here swap , dup -1 swap ! f >mode then ; immediate")
 	cpu.input(": . ;js  var k = cpu.d.pop(); cpu.d.push(cpu.d.pop()[k]) $$")
 	cpu.input(": last ;js var k = cpu.d.pop(); cpu.d.push(cpu.d.pop().lastIndexOf(k)) $$")
 	cpu.input(": slice ;js var t = cpu.d.pop(); var e = cpu.d.pop(); var s = cpu.d.pop(); cpu.d.push(t.slice(s, e)); $$")
@@ -760,7 +853,6 @@ function base(cpu)
 	cpu.input(": >> ;js cpu.d.push(cpu.d.pop().pop());  $$")
 	cpu.input(": length ;js cpu.d.push(cpu.d.pop().length); $$")
 	cpu.input(": >0 ;js cpu.d.push(cpu.d.pop() > 0) $$")
-
 	cpu.input(": last @ dup length -1 . ;")
 
 	cpu.input(": :: context >vocabulary create t >mode ;")
