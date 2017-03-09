@@ -5,14 +5,13 @@ function tokenize_string(rawtext)
 		return rawtext, ""
 	end
 	local eot = string.find(rawtext, "\\", 1, true)
-	if eot == nil or qot < eot then -- normal tokenize
+	if eot == nil or qot < eot then -- splice
 		eot = string.find(rawtext, "\"", 1, true) - 1
 		return string.sub(rawtext, 1, eot), string.sub(rawtext, eot+2)
 	end
-	
-	local out = string.sub(rawtext, 1, eot-1) .. string.sub(rawtext, eot+1, eot+1)
-	t = tokenize_string(string.sub(rawtext, eot+2))
-	return out .. t[1], t[2]
+	local before = string.sub(rawtext, 1, eot-1) .. string.sub(rawtext, eot+1, eot+1)
+	t1, t2 = tokenize_string(string.sub(rawtext, eot+2))
+	return before .. t1, t2
 end
 
 function tokenize_bySpc(rawtext) 
@@ -37,7 +36,7 @@ function tokenize(pattern, rawtext)
 	end
 	
 	-- if terminator is a quote do a special routine to crack out \" into a quote
-	--if pattern == "\"" then return tokenize_string(rawtext) end
+	if pattern == "\"" then return tokenize_string(rawtext) end
 	if pattern == "" or terminator == "" then return "", "" end
 	
 	-- ANYTHING ELSE DOESN'T WORK
