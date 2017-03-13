@@ -650,7 +650,8 @@ function bootstrap(dict)
 		"context",
 		"!", --  /* ( adr val -- ) write val to cell at adr */
 		[[
-			local v, a = cpu.pop(), cpu.pop()
+			local v = cpu.pop()
+			local a = cpu.pop()
 			cpu.dict[a] = v;
 			return cpu.next;
 		]]
