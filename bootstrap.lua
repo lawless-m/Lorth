@@ -166,8 +166,13 @@ function bootstrap(dict)
 		"token", -- /* ( token -- ) split cpu.pad with the pattern in ToS
 		[[
 
-			local tos = cpu.pop()
-			cpu.token, cpu.pad = tokenize(tos, cpu.pad)
+			local pattern = cpu.pop()
+			trace("PAT \"" .. pattern .. "\"")
+			local w
+			w, cpu.pad = tokenize(pattern, cpu.pad)
+			trace("w \"" .. tostring(w) .. "\"")
+			cpu.push(w)
+			trace("TOP w " .. tostring(cpu.DS.top()))
 			return cpu.next
 		]]
 	)
@@ -177,24 +182,18 @@ function bootstrap(dict)
 		"token?", -- /* ( token -- ( true | false ) ) extract everything in cpu.pad until the terminator, put it in the dictionary and report if you found anything */
 		[[
 			local pattern = cpu.pop()
+			local w
 			if cpu.pad == "" then
 				cpu.push(false)
 				return cpu.next
 			end
-			cpu.token, cpu.pad = tokenize(pattern, cpu.pad)
+			w, cpu.pad = tokenize(pattern, cpu.pad)
+			cpu.push(w)
 			cpu.push(true)
 			return cpu.next
 		]]
 	)
 	
-	dict.primary(
-		"context",
-		"<token", -- push the token to the DS
-		[[
-			cpu.push(cpu.token)
-			return cpu.next
-		]]
-	)
 	
 	dict.primary(
 		"context",
@@ -245,8 +244,10 @@ function bootstrap(dict)
 		"context",
 		"search", -- /* ( -- (false wa) | true ) search the dictionary for "word" push the wa and a flag for (not found) */
 		[[
-			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
+			trace("TOP s " .. tostring(cpu.DS.top()))
+			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.DS.top())
 			if wa then
+				cpu.pop()
 				cpu.push(wa)
 				cpu.push(false)
 			else
@@ -353,12 +354,12 @@ function bootstrap(dict)
 		"context",
 		"?number", -- /* ( -- flag (maybe value) ) depending on the mode, push a flag and the value or store it in the dictionary */
 		[[
-			local n = tonumber(cpu.token)
+			local n = tonumber(cpu.DS.top())
 			if n == nil then
 				cpu.push(true)
 				return cpu.next
 			end
-			
+			cpu.pop()
 			if cpu.mode then
 				cpu.dict.push(cpu.dict.cfa(cpu.vocabulary, "(value)"))
 				cpu.dict.push(n)
@@ -374,7 +375,7 @@ function bootstrap(dict)
 		"context",
 		"tokenerror", --  { /* ( -- ) report an unrecognised word error */
 		[[
-			warn("\"" .. tostring(cpu.token) .. "\" error, unrecognised word")
+			warn("\"" .. tostring(cpu.pop()) .. "\" error, unrecognised word")
 			return cpu.next
 		]]
 	)
@@ -475,12 +476,16 @@ function bootstrap(dict)
 	
 	dict.primary(
 		"context",
-		"?search",
+		"?search", -- (token -- (wa|token) (F|T) )
 		[[
-			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.token)
+			trace("TOP ?s " .. tostring(cpu.DS.top()))
+			local wa = cpu.dict.cfa(cpu.vocabulary, cpu.DS.top())
+			trace("TOP " .. tostring(cpu.DS.top()))
 			if wa then
+				cpu.pop()
 				cpu.push(wa)
 				cpu.push(false)
+				trace("WA " .. tostring(wa))
 				return cpu.next
 			end
 		
@@ -489,14 +494,16 @@ function bootstrap(dict)
 				return cpu.next
 			end
 				
-			wa = cpu.dict.cfa("compile", cpu.token)
+			wa = cpu.dict.cfa("compile", cpu.DS.top())
 			if wa then
+				cpu.pop()
 				cpu.push(wa)
 				cpu.push(false)
 				cpu.state = true
+				trace("COMPILE wa " .. tostring(wa))
 				return cpu.next
 			end
-			
+			trace("NOPE")
 			cpu.push(true)
 			return cpu.next			
 		]]
@@ -529,11 +536,10 @@ function bootstrap(dict)
 	
 	dict.secondary(
 		"context",
-		"<word", -- /* read space delimeted word from the pad */
+		"<word", -- /* read space delimited word from the pad */
 		{
 			cfa("spc"),
 			cfa("token"),
-			cfa("<token"),
 		}
 	)
 	
@@ -544,7 +550,7 @@ function bootstrap(dict)
 			cfa("<entry"), -- cpu.push(cpu.dict.entry)
 			cfa("here"), -- cpu.push(cpu.dict.n)
 			cfa(">entry"), -- cpu.dict.entry = cpu.pop()
-			cfa("<word"), -- cpu.push(" ");cpu.token, cpu.pad = tokenize(cpu.pop(), cpu.pad); cpu.push(cpu.token);
+			cfa("<word"), -- cpu.push(" "); w, cpu.pad = tokenize(cpu.pop(), cpu.pad); cpu.push(w);
 			cfa(","), -- cpu.dict.push(cpu.pop())
 			cfa(",vocab"), -- cpu.dict.push(cpu.vocabulary)
 			cfa(","), -- cpu.dict.push(cpu.pop())
@@ -560,9 +566,10 @@ function bootstrap(dict)
 		"XXcreate", -- /* ( -- ) create a dictionary entry for the next word in the pad */
 		[[
 			local e = cpu.dict.entry
+			local w
 			cpu.dict.entry = cpu.dict.n
-			cpu.token, cpu.pad = tokenize(" ", cpu.pad)
-			cpu.dict.push(cpu.token)
+			w, cpu.pad = tokenize(" ", cpu.pad)
+			cpu.dict.push(w)
 			cpu.dict.push(cpu.vocabulary)
 			cpu.dict.push(e)
 			cpu.dict.push(cpu.cfa)
@@ -570,14 +577,29 @@ function bootstrap(dict)
 		]]
 	)
 	
+	dict.primary(
+		"context",
+		"pad?", -- is anything on the pad
+		[[
+			cpu.push(cpu.pad ~= "")
+			return cpu.next
+		]]
+	)
+	
+	dict.secondary(
+		"context",
+		"rtoken",
+		{}
+	)
+	
 	dict.secondary(
 		"context",
 		"outer", -- /* ( -- ) tokenize the pad and do whatever it says */
 		{
-			cfa("spc"),
-			cfa("token?"),
+			cfa("pad?"),
 			cfa("(if!rjmp)"),
-			13,
+			14,
+				cfa("<word"),
 				cfa("?search"),
 				cfa("(if!rjmp)"),
 				7,
@@ -589,7 +611,7 @@ function bootstrap(dict)
 						4,
 					cfa("?execute"),
 					cfa("(rjmp)"),
-					-15,
+					-15, -- maybe wrong
 		}
 	)
 	
@@ -629,23 +651,15 @@ function bootstrap(dict)
 		]]	
 	)
 	
-	dict.secondary(
-		"context",
-		"does>", -- /* ( -- ) fill dictionary with runtime info */
-		{
-			cfa("(value)"),
-			"(does>)",
-			cfa("<entry"),
-			cfa("cfa"),
-			cfa("there"),
-			cfa("ca"),
-			cfa(","),
-			cfa("dp++"),
-			cfa("t"),
-			cfa(">mode"),
-		}
-	)
-	
+	--[[
+	: does 
+		." ;" 
+		<word 
+		dup 
+		!=
+		while
+		]]--
+		
 	dict.primary(
 		"context",
 		"!", --  /* ( adr val -- ) write val to cell at adr */
@@ -804,7 +818,7 @@ function base(cpu)
 	cpu.input(": quote 34 chr ;")
 
 	-- push the buffer up to "
-	cpu.input(": \" quote token <token ;")
+	cpu.input(": \" quote token ;")
 
 	-- store the buffer up to "
 	cpu.input(": .\" \" postpone (value) , , ; immediate")
@@ -836,11 +850,11 @@ function base(cpu)
 	cpu.input(": leave postpone (leave) , postpone (jmp) , <J +1 here  >J >J dp++ ; immediate")
 
 	-- needs does> @ ;
-	cpu.input(": constant create , ;")
+	cpu.input(": constant create , emit ;")
 	cpu.input(": variable create 0 ,  ;")
 
 	return [[
-	cpu.input(": ;code  .\" $$\" token <token (js) drop postpone (;code) , , ; immediate")
+	cpu.input(": ;code  .\" $$\" token (js) drop postpone (;code) , , ; immediate")
 
 	cpu.input(": ;js .\" $$\" token <token  .\" ; return cpu.next;\" + (js) if here swap , dup -1 swap ! f >mode then ; immediate")
 	cpu.input(": . ;js  var k = cpu.d.pop(); cpu.d.push(cpu.d.pop()[k]) $$")

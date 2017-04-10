@@ -18,7 +18,7 @@ Stack = function(nm)
 		function()
 			local v
 			if stack.n > 1 then
-				v = stack[stack.n]
+				v = stack[stack.n-1]
 			else
 				warn("TOP: Stack underflow, " .. stack.name)
 				v = nil
