@@ -850,7 +850,7 @@ function base(cpu)
 	cpu.input(": leave postpone (leave) , postpone (jmp) , <J +1 here  >J >J dp++ ; immediate")
 
 	-- needs does> @ ;
-	cpu.input(": constant create , emit ;")
+	cpu.input(": constant create , does> @ ;")
 	cpu.input(": variable create 0 ,  ;")
 
 	return [[
