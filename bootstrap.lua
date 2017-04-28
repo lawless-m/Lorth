@@ -646,19 +646,20 @@ function bootstrap(dict)
 		"context",
 		"immediate", -- /* ( -- ) set the vocabulary of the last defined word to "compile" */
 		[[
-			cpu.dict[cpu.dict.entry + 1] = "compile";
-			return cpu.next;
+			cpu.dict[cpu.dict.entry + 1] = "compile"
+			return cpu.next
 		]]	
 	)
 	
-	--[[
-	: does 
-		." ;" 
-		<word 
-		dup 
-		!=
-		while
-		]]--
+	
+	dict.primary(
+		"context",
+		"does>",
+		[[
+		
+			return cpu.next
+		]]
+	)
 		
 	dict.primary(
 		"context",
@@ -666,11 +667,10 @@ function bootstrap(dict)
 		[[
 			local v = cpu.pop()
 			local a = cpu.pop()
-			cpu.dict[a] = v;
-			return cpu.next;
+			cpu.dict[a] = v
+			return cpu.next
 		]]
 	)	
-	
 	
 	dict.primary(
 		"context",
